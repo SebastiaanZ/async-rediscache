@@ -26,7 +26,7 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Framework :: AsyncIO",
-        "Topic :: Database"
+        "Topic :: Database",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     install_requires=[
