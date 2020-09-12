@@ -123,15 +123,17 @@ class RedisObject:
     @staticmethod
     def _to_typestring(key_or_value: RedisKeyOrValue, prefixes: _PrefixTuple) -> str:
         """Turn a valid Redis type into a typestring."""
-        for prefix, _type in prefixes:
-            # Convert bools into integers before storing them.
-            if type(key_or_value) is bool:
-                bool_int = int(key_or_value)
-                return f"{prefix}{bool_int}"
+        key_or_value_type = type(key_or_value)
 
+        for prefix, _type in prefixes:
             # isinstance is a bad idea here, because isinstance(False, int) == True.
-            if type(key_or_value) is _type:
+            if key_or_value_type is _type:
+                if key_or_value_type is bool:
+                    # Convert bools into integers before storing them
+                    key_or_value = int(key_or_value)
+
                 return f"{prefix}{key_or_value}"
+
         raise TypeError(f"RedisObject._to_typestring only supports the following: {prefixes}.")
 
     @staticmethod
