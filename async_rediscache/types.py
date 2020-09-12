@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 # Type aliases
 RedisKeyType = Union[str, int]
-RedisValueType = Union[str, int, float]
+RedisValueType = Union[str, int, float, bool]
 RedisKeyOrValue = Union[RedisKeyType, RedisValueType]
 
 # Prefix tuples
@@ -33,6 +33,7 @@ _VALUE_PREFIXES = (
     ("f|", float),
     ("i|", int),
     ("s|", str),
+    ("b|", bool),
 )
 _KEY_PREFIXES = (
     ("i|", int),
@@ -123,7 +124,13 @@ class RedisObject:
     def _to_typestring(key_or_value: RedisKeyOrValue, prefixes: _PrefixTuple) -> str:
         """Turn a valid Redis type into a typestring."""
         for prefix, _type in prefixes:
-            if isinstance(key_or_value, _type):
+            # Convert bools into integers before storing them.
+            if type(key_or_value) is bool:
+                bool_int = int(key_or_value)
+                return f"{prefix}{bool_int}"
+
+            # isinstance is a bad idea here, because isinstance(False, int) == True.
+            if type(key_or_value) is _type:
                 return f"{prefix}{key_or_value}"
         raise TypeError(f"RedisObject._to_typestring only supports the following: {prefixes}.")
 
@@ -139,6 +146,13 @@ class RedisObject:
         # Now we convert our unicode string back into the type it originally was.
         for prefix, _type in prefixes:
             if key_or_value.startswith(prefix):
+
+                # For booleans, we need special handling because bool("False") is True.
+                if prefix == "b|":
+                    value = key_or_value[len(prefix):]
+                    return bool(int(value))
+
+                # Otherwise we can just convert normally.
                 return _type(key_or_value[len(prefix):])
         raise TypeError(f"RedisObject._from_typestring only supports the following: {prefixes}.")
 
@@ -217,8 +231,8 @@ class RedisCache(RedisObject):
     is that all the public methods in this class are coroutines, and must be
     awaited.
 
-    Because of limitations in Redis, this cache will only accept strings,
-    integers and floats both for keys and values.
+    Because of limitations in Redis, this cache will only accept strings and
+    integers as keys and strings, integers, floats, and bools as values.
 
     By default, the namespace key of a RedisCache is automatically determined
     by the name of the owner class and the class attribute assigned to the
