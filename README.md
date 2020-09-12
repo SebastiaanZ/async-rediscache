@@ -99,6 +99,8 @@ async def main():
     await cache.delete("Barry")
     await cache.increment("Brett", 1)  # Increment Brett's int by 1
     await cache.clear()
+
+    await session.close()
 ```
 
 #### `RedisQueue`
