@@ -26,14 +26,14 @@ jobs:
         pip install setuptools wheel
         python setup.py sdist bdist_wheel
     - name: Publish dev/rc build to test.pypi.org
-      if: ${{ contains(github.ref, "dev") || contains(github.ref, "rc") }}
+      if: ${{ contains(github.ref, 'dev') || contains(github.ref, 'rc') }}
       uses: pypa/gh-action-pypi-publish@v1.3.1
       with:
         user: __token__
         password: ${{ secrets.PYPI_TEST }}
         repository_url: https://test.pypi.org/legacy/
     - name: Publish production build to PyPI
-      if: ${{ !contains(github.ref, "dev") && !contains(github.ref, "rc") }}
+      if: ${{ !contains(github.ref, 'dev') && !contains(github.ref, 'rc') }}
       uses: pypa/gh-action-pypi-publish@v1.3.1
       with:
         user: __token__
