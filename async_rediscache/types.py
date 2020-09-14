@@ -48,8 +48,6 @@ class NoNamespaceError(RuntimeError):
 class RedisObject:
     """A base class for Redis caching object implementations."""
 
-    _namespaces = []
-
     def __init__(self, *, namespace: Optional[str] = None) -> None:
         """Initialize the RedisCache."""
         self._local_namespace = namespace
@@ -72,7 +70,7 @@ class RedisObject:
         attribute will act as an alias to the original instance.
         """
         if not self._local_namespace:
-            self._set_local_namespace(f"{owner.__name__}.{attribute_name}")
+            self._local_namespace = f"{owner.__name__}.{attribute_name}"
 
     def __repr__(self) -> str:
         """Return a beautiful representation of this object instance."""
@@ -105,20 +103,6 @@ class RedisObject:
             raise NoNamespaceError(error_message)
 
         return await self.redis_session.pool
-
-    def _set_local_namespace(self, namespace: str) -> None:
-        """Set the local namespace for this Redis object."""
-        if namespace in self._namespaces:
-            log.info(
-                f"Setting the local namespace to {namespace}, which was already in use. This may "
-                "happen if the file containing a class with a RedisCache was reloaded. It may also "
-                "be the result of a namespace conflict."
-            )
-        else:
-            log.debug(f"Setting local namespace to {namespace}")
-
-        self._namespaces.append(namespace)
-        self._local_namespace = namespace
 
     @staticmethod
     def _to_typestring(key_or_value: RedisKeyOrValue, prefixes: _PrefixTuple) -> str:
