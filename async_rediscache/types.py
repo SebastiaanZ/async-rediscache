@@ -48,9 +48,12 @@ class NoNamespaceError(RuntimeError):
 class RedisObject:
     """A base class for Redis caching object implementations."""
 
-    def __init__(self, *, namespace: Optional[str] = None) -> None:
+    def __init__(
+            self, *, namespace: Optional[str] = None, use_global_namespace: bool = True
+    ) -> None:
         """Initialize the RedisCache."""
         self._local_namespace = namespace
+        self._use_global_namespace = use_global_namespace
         self._transaction_lock = None
 
     def __set_name__(self, owner: Any, attribute_name: str) -> None:
@@ -85,7 +88,7 @@ class RedisObject:
     def namespace(self) -> str:
         """Return the `namespace` of this RedisObject."""
         global_namespace = self.redis_session.global_namespace
-        if global_namespace:
+        if self._use_global_namespace and global_namespace:
             namespace = f"{global_namespace}.{self._local_namespace}"
         else:
             namespace = self._local_namespace
