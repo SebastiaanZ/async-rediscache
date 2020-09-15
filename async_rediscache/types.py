@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, ItemsView, Optional, Tuple, Union
 
 import aioredis
 
+from .helpers import namespace_lock
 from .session import RedisSession
 
 __all__ = [
@@ -47,6 +48,8 @@ class NoNamespaceError(RuntimeError):
 
 class RedisObject:
     """A base class for Redis caching object implementations."""
+
+    _namespace_locks = {}
 
     def __init__(
             self, *, namespace: Optional[str] = None, use_global_namespace: bool = True
@@ -268,6 +271,7 @@ class RedisCache(RedisObject):
         super().__init__(*args, **kwargs)
         self._increment_lock = None
 
+    @namespace_lock
     async def set(self, key: RedisKeyType, value: RedisValueType) -> None:
         """Store an item in the Redis cache."""
         # Convert to a typestring and then set it
@@ -278,6 +282,7 @@ class RedisCache(RedisObject):
         with await self._get_pool_connection() as connection:
             await connection.hset(self.namespace, key, value)
 
+    @namespace_lock
     async def get(
             self, key: RedisKeyType, default: Optional[RedisValueType] = None
     ) -> Optional[RedisValueType]:
@@ -296,6 +301,7 @@ class RedisCache(RedisObject):
             log.debug(f"Value found, returning value {value}")
             return value
 
+    @namespace_lock
     async def delete(self, key: RedisKeyType) -> None:
         """
         Delete an item from the Redis cache.
@@ -310,6 +316,7 @@ class RedisCache(RedisObject):
         with await self._get_pool_connection() as connection:
             return await connection.hdel(self.namespace, key)
 
+    @namespace_lock
     async def contains(self, key: RedisKeyType) -> bool:
         """
         Check if a key exists in the Redis cache.
@@ -323,6 +330,7 @@ class RedisCache(RedisObject):
         log.debug(f"Testing if {key} exists in the RedisCache - Result is {exists}")
         return exists
 
+    @namespace_lock
     async def items(self) -> ItemsView:
         """
         Fetch all the key/value pairs in the cache.
@@ -345,6 +353,7 @@ class RedisCache(RedisObject):
         log.debug(f"Retrieving all key/value pairs from cache, total of {len(items)} items.")
         return items
 
+    @namespace_lock
     async def length(self) -> int:
         """Return the number of items in the Redis cache."""
         with await self._get_pool_connection() as connection:
@@ -352,31 +361,35 @@ class RedisCache(RedisObject):
         log.debug(f"Returning length. Result is {number_of_items}.")
         return number_of_items
 
+    @namespace_lock
     async def to_dict(self) -> Dict:
         """Convert to dict and return."""
         return {key: value for key, value in await self.items()}
 
+    @namespace_lock
     async def clear(self) -> None:
         """Deletes the entire hash from the Redis cache."""
         log.debug("Clearing the cache of all key/value pairs.")
         with await self._get_pool_connection() as connection:
             await connection.delete(self.namespace)
 
+    @namespace_lock
     async def pop(
             self, key: RedisKeyType, default: Optional[RedisValueType] = None
     ) -> RedisValueType:
         """Get the item, remove it from the cache, and provide a default if not found."""
         log.debug(f"Attempting to pop {key}.")
-        value = await self.get(key, default)
+        value = await self.get(key, default, acquire_lock=False)
 
         log.debug(
             f"Attempting to delete item with key '{key}' from the cache. "
             "If this key doesn't exist, nothing will happen."
         )
-        await self.delete(key)
+        await self.delete(key, acquire_lock=False)
 
         return value
 
+    @namespace_lock
     async def update(self, items: Dict[RedisKeyType, RedisValueType]) -> None:
         """
         Update the Redis cache with multiple values.
@@ -393,6 +406,7 @@ class RedisCache(RedisObject):
         with await self._get_pool_connection() as connection:
             await connection.hmset_dict(self.namespace, self._dict_to_typestring(items))
 
+    @namespace_lock
     async def increment(self, key: RedisKeyType, amount: Optional[int, float] = 1) -> None:
         """
         Increment the value by `amount`.
@@ -405,33 +419,22 @@ class RedisCache(RedisObject):
         """
         log.debug(f"Attempting to increment/decrement the value with the key {key} by {amount}.")
 
-        # We initialize the lock here, because we need to ensure we get it
-        # running on the same loop as the calling coroutine.
-        #
-        # If we initialized the lock in the __init__, the loop that this method
-        # would be called from might not exist yet, and so the lock would be on
-        # a different loop, which would raise RuntimeErrors.
-        if self._increment_lock is None:
-            self._increment_lock = asyncio.Lock()
+        value = await self.get(key, acquire_lock=False)
 
-        # Since this makes several API calls, we need to prevent race conditions
-        async with self._increment_lock:
-            value = await self.get(key)
+        # Can't increment a non-existing value
+        if value is None:
+            error_message = "The provided key does not exist!"
+            log.error(error_message)
+            raise KeyError(error_message)
 
-            # Can't increment a non-existing value
-            if value is None:
-                error_message = "The provided key does not exist!"
-                log.error(error_message)
-                raise KeyError(error_message)
-
-            # If it does exist and it's an int or a float, increment and set it.
-            if isinstance(value, int) or isinstance(value, float):
-                value += amount
-                await self.set(key, value)
-            else:
-                error_message = "You may only increment or decrement integers and floats."
-                log.error(error_message)
-                raise TypeError(error_message)
+        # If it does exist and it's an int or a float, increment and set it.
+        if isinstance(value, int) or isinstance(value, float):
+            value += amount
+            await self.set(key, value, acquire_lock=False)
+        else:
+            error_message = "You may only increment or decrement integers and floats."
+            log.error(error_message)
+            raise TypeError(error_message)
 
     async def decrement(self, key: RedisKeyType, amount: Optional[int, float] = 1) -> None:
         """
@@ -458,6 +461,7 @@ class RedisQueue(RedisObject):
     namespace as the `namespace` keyword argument to constructor.
     """
 
+    @namespace_lock
     async def put(self, value: RedisValueType) -> None:
         """
         Remove and return a value from the queue.
@@ -478,6 +482,7 @@ class RedisQueue(RedisObject):
     # This method is provided to provide a compatible interface with Queue.SimpleQueue
     put_nowait = partialmethod(put)
 
+    @namespace_lock
     async def get(self, wait: bool = True, timeout: int = 0) -> Optional[RedisValueType]:
         """
         Remove and return a value from the queue.
@@ -518,6 +523,7 @@ class RedisQueue(RedisObject):
     # This method is provided to provide a compatible interface with Queue.SimpleQueue
     get_nowait = partialmethod(get, wait=False)
 
+    @namespace_lock
     async def qsize(self) -> int:
         """
         Return the (approximate) size of the RedisQueue.
@@ -529,6 +535,7 @@ class RedisQueue(RedisObject):
         with await self._get_pool_connection() as connection:
             return await connection.llen(self.namespace)
 
+    @namespace_lock
     async def empty(self) -> bool:
         """
         Return `True` if the RedisQueue is empty.
