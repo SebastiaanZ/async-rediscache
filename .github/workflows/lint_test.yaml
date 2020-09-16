@@ -54,7 +54,7 @@ jobs:
         if: ${{ success() && steps.pycache.outputs.cache-hit != 'true' }}
 
       - name: Run flake8
-        run: pipenv run lint
+        run: python -m flake8
 
       - name: Run unittest
-        run: pipenv run tests
+        run: python -m unittest
