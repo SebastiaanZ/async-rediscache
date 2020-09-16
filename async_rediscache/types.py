@@ -364,7 +364,7 @@ class RedisCache(RedisObject):
     @namespace_lock
     async def to_dict(self) -> Dict:
         """Convert to dict and return."""
-        return {key: value for key, value in await self.items()}
+        return {key: value for key, value in await self.items(acquire_lock=False)}
 
     @namespace_lock
     async def clear(self) -> None:
@@ -542,4 +542,4 @@ class RedisQueue(RedisObject):
 
         The caveat that applies to the `qsize` method also applies here.
         """
-        return await self.qsize() == 0
+        return await self.qsize(acquire_lock=False) == 0
