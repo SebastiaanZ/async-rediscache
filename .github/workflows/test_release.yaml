@@ -1,7 +1,7 @@
 name: Test Release to test.pypi.org
 
 on:
-  create:
+  push:
     branches-ignore:
       - master
     tags:
