@@ -15,7 +15,7 @@ setup(
     long_description_content_type="text/markdown",
     author="Python Discord",
     author_email="staff@pythondiscord.com",
-    url="https://github.com/SebastiaanZ/async-rediscache",
+    url="https://github.com/python-discord/async-rediscache",
     license="MIT",
     packages=['async_rediscache'],
     classifiers=[
