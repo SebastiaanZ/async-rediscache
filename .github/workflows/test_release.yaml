@@ -2,8 +2,6 @@ name: Test Release to test.pypi.org
 
 on:
   push:
-    branches-ignore:
-      - master
     tags:
       - '**dev**'
       - '**rc**'
