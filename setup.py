@@ -32,6 +32,7 @@ setup(
     install_requires=[
         "aioredis>=1"
     ],
+    python_requires='~=3.7',
     extras_require={
         "fakeredis": ["fakeredis>=1.3.1"],
     },
