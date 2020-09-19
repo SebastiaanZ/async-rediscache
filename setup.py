@@ -4,20 +4,20 @@ This file is used to install this package via the pip tool.
 It keeps track of versioning, as well as dependencies and
 what versions of python we support.
 """
-from setuptools import find_packages, setup
+from setuptools import setup
 
 
 setup(
     name="async-rediscache",
-    version="0.1.1",
+    version="0.1.2-dev",
     description="An easy to use asynchronous Redis cache",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     author="Python Discord",
     author_email="staff@pythondiscord.com",
-    url="https://github.com/SebastiaanZ/async-rediscache",
+    url="https://github.com/python-discord/async-rediscache",
     license="MIT",
-    packages=find_packages(),
+    packages=["async_rediscache"],
     classifiers=[
         "License :: OSI Approved :: MIT License",
         "Development Status :: 4 - Beta",
