@@ -33,7 +33,6 @@ setup(
         "aioredis>=1"
     ],
     extras_require={
-        "dev": ["flake8", "fakeredis>=1.3.1"],
         "fakeredis": ["fakeredis>=1.3.1"],
     },
     include_package_data=True,
