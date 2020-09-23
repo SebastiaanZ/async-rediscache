@@ -43,7 +43,7 @@ class RedisQueue(RedisObject):
         value_string = self._value_to_typestring(value)
         log.debug(f"putting {value_string!r} on RedisQueue `{self.namespace}`")
         with await self._get_pool_connection() as connection:
-            await connection.rpush(self.namespace, value_string)
+            await connection.lpush(self.namespace, value_string)
 
     # This method is provided to provide a compatible interface with Queue.SimpleQueue
     put_nowait = functools.partialmethod(put)
@@ -68,7 +68,7 @@ class RedisQueue(RedisObject):
 
         with await self._get_pool_connection() as connection:
             if wait:
-                value = await connection.blpop(self.namespace, timeout=timeout)
+                value = await connection.brpop(self.namespace, timeout=timeout)
 
                 # If we can get an item from the queue before the timeout runs
                 # out, we get a list back, in the form `[namespace, value]`. If
@@ -78,7 +78,7 @@ class RedisQueue(RedisObject):
                 if value:
                     _, value = value
             else:
-                value = await connection.lpop(self.namespace)
+                value = await connection.rpop(self.namespace)
 
         if value is not None:
             value = self._value_from_typestring(value)
