@@ -126,8 +126,10 @@ class RedisSession(metaclass=RedisSingleton):
                 )
 
             kwargs = dict(self._session_kwargs)
-            # `address` is the only kwarg not supported by fakeredis
+
+            # the `address` and `password` kwargs are not supported by redis
             kwargs.pop("address", None)
+            kwargs.pop("password", None)
 
             pool_constructor = fakeredis.aioredis.create_redis_pool(**kwargs)
         else:
