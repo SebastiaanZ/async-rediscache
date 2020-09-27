@@ -38,6 +38,13 @@ async def main():
     await session.close()
 ```
 
+### Creating a `RedisSession` with a network connection
+
+```python
+async def main():
+    connection = {"address": "redis://127.0.0.1:6379"}
+    async_rediscache.RedisSession(**connection)
+```
 ### `RedisCache`
 
 A `RedisCache` is the most basic data type provided by `async-rediscache`. It works like a dictionary in that you can associate keys with values. To prevent key collisions, each `RedisCache` instance should use a unique `namespace` identifier that will be prepended to the key when storing the pair to Redis.
