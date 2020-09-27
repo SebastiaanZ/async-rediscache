@@ -4,7 +4,7 @@ This file is used to install this package via the pip tool.
 It keeps track of versioning, as well as dependencies and
 what versions of python we support.
 """
-from setuptools import setup
+from setuptools import find_packages, setup
 
 
 setup(
@@ -17,7 +17,7 @@ setup(
     author_email="staff@pythondiscord.com",
     url="https://github.com/python-discord/async-rediscache",
     license="MIT",
-    packages=['async_rediscache'],
+    packages=find_packages(exclude=["tests", "tests.*"]),
     classifiers=[
         "License :: OSI Approved :: MIT License",
         "Development Status :: 4 - Beta",
