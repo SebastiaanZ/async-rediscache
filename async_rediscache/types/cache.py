@@ -55,11 +55,12 @@ class RedisCache(RedisObject):
             await self.cache.contains("key")
 
             # iterating the cache
-            async for key, value in self.cache.items():
+            for key, value in await self.cache.items():
                 print(value)
 
             # We can even iterate in a comprehension!
-            consumed = [value async for key, value in self.cache.items()]
+            consumed = [value for key, value in await self.cache.items()]
+
     """
 
     def __init__(self, *args, **kwargs) -> None:
