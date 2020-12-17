@@ -2,7 +2,7 @@ import functools
 import logging
 from typing import Optional
 
-from .base import RedisObject, RedisValueType, namespace_lock
+from .base import RedisObject, RedisValueType, namespace_lock_no_warn
 
 __all__ = [
     "RedisQueue",
@@ -27,7 +27,7 @@ class RedisQueue(RedisObject):
     namespace as the `namespace` keyword argument to constructor.
     """
 
-    @namespace_lock
+    @namespace_lock_no_warn
     async def put(self, value: RedisValueType) -> None:
         """
         Remove and return a value from the queue.
@@ -48,7 +48,7 @@ class RedisQueue(RedisObject):
     # This method is provided to provide a compatible interface with Queue.SimpleQueue
     put_nowait = functools.partialmethod(put)
 
-    @namespace_lock
+    @namespace_lock_no_warn
     async def get(self, wait: bool = True, timeout: int = 0) -> Optional[RedisValueType]:
         """
         Remove and return a value from the queue.
@@ -89,7 +89,7 @@ class RedisQueue(RedisObject):
     # This method is provided to provide a compatible interface with Queue.SimpleQueue
     get_nowait = functools.partialmethod(get, wait=False)
 
-    @namespace_lock
+    @namespace_lock_no_warn
     async def qsize(self) -> int:
         """
         Return the (approximate) size of the RedisQueue.
@@ -101,7 +101,7 @@ class RedisQueue(RedisObject):
         with await self._get_pool_connection() as connection:
             return await connection.llen(self.namespace)
 
-    @namespace_lock
+    @namespace_lock_no_warn
     async def empty(self) -> bool:
         """
         Return `True` if the RedisQueue is empty.
