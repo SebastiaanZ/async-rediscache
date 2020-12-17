@@ -168,14 +168,12 @@ class RedisCache(RedisObject):
             self, key: RedisKeyType, default: Optional[RedisValueType] = None
     ) -> RedisValueType:
         """Get the item, remove it from the cache, and provide a default if not found."""
-        log.debug(f"Attempting to pop {key}.")
-        value = await self.get(key, default, acquire_lock=False)
+        pop_script = await self._load_script("rediscache_pop.lua")
+        key = self._key_to_typestring(key)
 
-        log.debug(
-            f"Attempting to delete item with key '{key}' from the cache. "
-            "If this key doesn't exist, nothing will happen."
-        )
-        await self.delete(key, acquire_lock=False)
+        log.debug(f"Popping {key!r} from the cache.")
+        with await self._get_pool_connection() as connection:
+            value = await connection.evalsha(pop_script, keys=[self.namespace, key])
 
         return self._maybe_value_from_typestring(value, default)
 
