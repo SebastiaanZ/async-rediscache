@@ -1,3 +1,5 @@
+import datetime
+
 import time_machine
 
 from async_rediscache import types
@@ -223,6 +225,21 @@ class RedisCacheTests(BaseRedisObjectTests):
             traveller.shift(5)
             self.assertEqual(await self.cache.get("key"), "value")
             traveller.shift(6)
+            self.assertIsNone(await self.cache.get("key"))
+
+    async def test_set_expiry_at_accepts_datetime(self):
+        """The namespace should expire after the specified timestamp."""
+        dt = datetime.datetime(2021, 1, 1, 12, 11, 10, tzinfo=datetime.timezone.utc)
+        delta_expiry = datetime.timedelta(seconds=50_000_000)
+
+        dt_expiry = dt + delta_expiry
+        with time_machine.travel(dt, tick=False) as traveller:
+            await self.cache.set("key", "value")
+            result = await self.cache.set_expiry_at(dt_expiry)
+            self.assertTrue(result)
+            traveller.move_to(dt_expiry - datetime.timedelta(seconds=1))
+            self.assertEqual(await self.cache.get("key"), "value")
+            traveller.move_to(dt_expiry + datetime.timedelta(seconds=1))
             self.assertIsNone(await self.cache.get("key"))
 
     async def test_expiry_at_returns_false_for_nonexisting_key(self):
