@@ -13,6 +13,8 @@ flake8-string-format = "~=0.3.0"
 flake8-tidy-imports = "~=4.1.0"
 flake8-todo = "~=0.7"
 pep8-naming = "~=0.11.0"
+coverage = "~=5.3"
+coveralls = "~=2.2.0"
 
 [packages]
 aioredis = "~=1.3.1"

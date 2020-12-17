@@ -43,7 +43,7 @@ jobs:
             ${{ hashFiles('Pipfile') }}"
 
       - name: Prepend PATH
-        run: echo '::add-path::${{ env.PYTHONUSERBASE }}/bin'
+        run: echo '${{ env.PYTHONUSERBASE }}/bin' >> $GITHUB_PATH
 
       - name: Install pipenv
         run: pip install pipenv
@@ -57,4 +57,13 @@ jobs:
         run: python -m flake8
 
       - name: Run unittest
-        run: python -m unittest
+        run: |
+          python -m coverage run -m unittest
+          python -m coverage report -m
+
+      # This step will publish the coverage reports coveralls.io and
+      # print a "job" link in the output of the GitHub Action
+      - name: Publish coverage report to coveralls.io
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m coveralls
