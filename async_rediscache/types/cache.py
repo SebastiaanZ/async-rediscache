@@ -220,11 +220,10 @@ class RedisCache(RedisObject):
 
         return self._maybe_value_from_typestring(value)
 
-    @namespace_lock_no_warn
     async def decrement(self, key: RedisKeyType, amount: Optional[float] = 1) -> float:
         """
         Decrement the value by `amount`.
 
         Basically just does the opposite of .increment.
         """
-        return await self.increment(key, -amount, acquire_lock=False)
+        return await self.increment(key, -amount)

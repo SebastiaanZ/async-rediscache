@@ -160,6 +160,7 @@ class RedisTaskQueue(RedisQueue):
         client_id = f"{self.client_identifier}_" if self.client_identifier is not None else ""
         return f"{self.namespace}${client_id}pending"
 
+    @namespace_lock_no_warn
     async def get(self, wait: bool = True, timeout: int = 0) -> Optional[RedisTask]:
         """
         Get an item from the queue wrapped in a Task instance.
@@ -191,6 +192,7 @@ class RedisTaskQueue(RedisQueue):
         log.debug(f"got value `{value!r}` from RedisTaskQueue `{self.namespace}`")
         return value
 
+    @namespace_lock_no_warn
     async def task_done(self, task: RedisTask) -> None:
         """Mark a task as done by removing it from the pending tasks queue."""
         typestring = self._value_to_typestring(task.value)
@@ -202,6 +204,7 @@ class RedisTaskQueue(RedisQueue):
 
         task.done = True
 
+    @namespace_lock_no_warn
     async def reschedule_pending_task(self, task: typing.Union[RedisValueType. RedisTask]) -> None:
         """
         Move a `task` from the pending tasks queue back to the main queue.
@@ -230,6 +233,7 @@ class RedisTaskQueue(RedisQueue):
                     f"task `{task!r}` not found in pending tasks queue `{self.namespace_pending}`"
                 ) from None
 
+    @namespace_lock_no_warn
     async def reschedule_all_pending_client_tasks(self) -> int:
         """
         Reschedule all pending tasks of this client.
