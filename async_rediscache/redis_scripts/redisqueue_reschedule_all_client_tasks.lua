@@ -10,7 +10,7 @@ else
 end
 
 if queue_size > 0 then
-  redis.call("LPUSH", KEYS[1], unpack(client_tasks))
+  redis.call("RPUSH", KEYS[1], unpack_function(client_tasks))
 end
 
 redis.call("DEL", KEYS[2])
