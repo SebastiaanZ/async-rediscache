@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import functools
 import logging
+import typing
 import weakref
 from typing import Optional
-
-import typing
 
 import aioredis
 
 from .base import RedisObject, RedisValueType, namespace_lock_no_warn
+
 
 __all__ = [
     "RedisQueue",
