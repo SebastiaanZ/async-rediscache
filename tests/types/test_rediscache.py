@@ -1,3 +1,5 @@
+import time_machine
+
 from async_rediscache import types
 from .helpers import BaseRedisObjectTests
 
@@ -194,3 +196,37 @@ class RedisCacheTests(BaseRedisObjectTests):
             with self.subTest(**case):
                 with self.assertRaises(TypeError):
                     await self.cache.increment("value", amount=case["increment"])
+
+    async def test_expiry_expires_after_timeout(self):
+        """Test setting an expiry on a RedisCache."""
+        with time_machine.travel(0, tick=False) as traveller:
+            await self.cache.set("key", "value")
+            result = await self.cache.set_expiry(10)
+            self.assertTrue(result)
+            traveller.shift(5)
+            self.assertEqual(await self.cache.get("key"), "value")
+            traveller.shift(6)
+            self.assertIsNone(await self.cache.get("key"))
+
+    async def test_expiry_returns_false_for_nonexisting_key(self):
+        """The set_expiry method should return `False` for non-existing keys."""
+        # Before settings the first key->value, the outer namespace key does
+        # not exist yet.
+        self.assertFalse(await self.cache.set_expiry(10))
+
+    async def test_set_expiry_at_expires_after_timestamp(self):
+        """The namespace should expire after the specified timestamp."""
+        with time_machine.travel(1100, tick=False) as traveller:
+            await self.cache.set("key", "value")
+            result = await self.cache.set_expiry_at(1110)
+            self.assertTrue(result)
+            traveller.shift(5)
+            self.assertEqual(await self.cache.get("key"), "value")
+            traveller.shift(6)
+            self.assertIsNone(await self.cache.get("key"))
+
+    async def test_expiry_at_returns_false_for_nonexisting_key(self):
+        """The set_expiry method should return `False` for non-existing keys."""
+        # Before settings the first key->value, the outer namespace key does
+        # not exist yet.
+        self.assertFalse(await self.cache.set_expiry_at(10))
