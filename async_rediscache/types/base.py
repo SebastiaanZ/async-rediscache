@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import importlib.resources
 import logging
 import warnings
 from functools import partialmethod
@@ -11,7 +12,7 @@ from typing import Dict, Optional, Tuple, Union
 
 import aioredis
 
-from async_rediscache.session import RedisSession
+from ..session import RedisSession
 
 __all__ = [
     "RedisObject",
@@ -57,6 +58,7 @@ class RedisObject:
     """A base class for Redis caching object implementations."""
 
     _namespace_locks = {}
+    _registered_scripts = {}
 
     def __init__(
             self, *, namespace: Optional[str] = None, use_global_namespace: bool = True
@@ -204,6 +206,26 @@ class RedisObject:
             self._key_to_typestring(key): self._value_to_typestring(value)
             for key, value in dictionary.items()
         }
+
+    async def _load_script(self, script: str) -> str:
+        """Load a Redis Lua script and return the SHA Digest."""
+        if script in self._registered_scripts:
+            digest = self._registered_scripts[script]
+
+            # check if the script is already registered with redis
+            with await self._get_pool_connection() as connection:
+                [script_exists] = await connection.script_exists(digest)
+
+            if script_exists:
+                return digest
+
+        redis_script = importlib.resources.read_text("async_rediscache.redis_scripts", script)
+        log.debug(f"Registering `{script}` script with Redis.")
+
+        with await self._get_pool_connection() as connection:
+            self._registered_scripts[script] = await connection.script_load(redis_script)
+
+        return self._registered_scripts[script]
 
     def atomic_transaction(self, method: Callable) -> Callable:
         """
