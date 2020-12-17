@@ -43,6 +43,10 @@ _KEY_PREFIXES = (
     ("i|", int),
     ("s|", str),
 )
+_ERROR_PREFIXES = (
+    ("TypeError|", TypeError),
+    ("ValueError|", ValueError),
+)
 
 
 class NoNamespaceError(RuntimeError):
@@ -161,6 +165,31 @@ class RedisObject:
     _value_to_typestring: MethodType = partialmethod(_to_typestring, prefixes=_VALUE_PREFIXES)
     _key_from_typestring: MethodType = partialmethod(_from_typestring, prefixes=_KEY_PREFIXES)
     _value_from_typestring: MethodType = partialmethod(_from_typestring, prefixes=_VALUE_PREFIXES)
+
+    def _maybe_value_from_typestring(
+        self,
+        maybe_value: Optional[Union[bytes, str]],
+        default: Optional[RedisValueType] = None,
+    ) -> Optional[RedisValueType]:
+        """
+        Deserialize an optional redis return value safely.
+
+        This method will try to match `maybe_value` in three ways:
+        - If `maybe_value` is `None`, return the default
+        - If `maybe_value` represents an error, raise the appropriate exception
+        - If `maybe_value` represents a valid return value, deserialize it
+        """
+        if maybe_value is None:
+            return default
+
+        if isinstance(maybe_value, bytes):
+            maybe_value = maybe_value.decode('utf-8')
+
+        for prefix, exception in _ERROR_PREFIXES:
+            if maybe_value.startswith(prefix):
+                raise exception(maybe_value[len(prefix):])
+
+        return self._value_from_typestring(maybe_value)
 
     def _dict_from_typestring(self, dictionary: Dict) -> Dict:
         """Turns all contents of a dict into valid Redis types."""

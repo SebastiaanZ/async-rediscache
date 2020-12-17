@@ -90,13 +90,7 @@ class RedisCache(RedisObject):
         with await self._get_pool_connection() as connection:
             value = await connection.hget(self.namespace, key)
 
-        if value is None:
-            log.debug(f"Value not found, returning default value {default}")
-            return default
-        else:
-            value = self._value_from_typestring(value)
-            log.debug(f"Value found, returning value {value}")
-            return value
+        return self._maybe_value_from_typestring(value, default)
 
     @namespace_lock_no_warn
     async def delete(self, key: RedisKeyType) -> None:
@@ -184,7 +178,7 @@ class RedisCache(RedisObject):
         )
         await self.delete(key, acquire_lock=False)
 
-        return value
+        return self._maybe_value_from_typestring(value, default)
 
     @namespace_lock_no_warn
     async def update(self, items: Dict[RedisKeyType, RedisValueType]) -> None:
