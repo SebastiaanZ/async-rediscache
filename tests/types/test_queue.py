@@ -229,7 +229,7 @@ class RedisTaskQueueTests(BaseRedisObjectTests):
         task = await self.queue.get()
         del self.queue
         with self.assertRaises(RuntimeError):
-            _owner = task.owner
+            _owner = task.owner  # noqa: F841
 
 
 class RedisTaskQueueMultipleClientsTests(BaseRedisObjectTests):
