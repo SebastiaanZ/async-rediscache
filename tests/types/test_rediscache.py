@@ -179,3 +179,18 @@ class RedisCacheTests(BaseRedisObjectTests):
                     await self.cache.decrement(target, *increment)
                     post_decrement = await self.cache.get(target)
                     self.assertEqual(local_copy[target], post_decrement)
+
+    async def test_increment_raises_type_error_for_invalid_types(self):
+        """Test if `.increment` raises TypeError for invalid types."""
+        test_cases = (
+            {"initial": 100, "increment": "Python Discord"},
+            {"initial": 1.1, "increment": True},
+            {"initial": "Python Discord", "increment": 200},
+            {"initial": True, "increment": 2.2},
+        )
+
+        for case in test_cases:
+            await self.cache.set("value", case["initial"])
+            with self.subTest(**case):
+                with self.assertRaises(TypeError):
+                    await self.cache.increment("value", amount=case["increment"])
