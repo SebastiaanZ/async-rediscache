@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import logging
+import warnings
 from functools import partialmethod
 from types import MethodType
 from typing import Any, Callable
@@ -19,6 +20,7 @@ __all__ = [
     "RedisKeyType",
     "RedisValueType",
     "namespace_lock",
+    "namespace_lock_no_warn",
     "NamespaceLock",
 ]
 
@@ -216,9 +218,21 @@ class RedisObject:
 
 
 class NamespaceLock(asyncio.Lock):
-    """An asyncio.Lock subclass that is aware of the namespace that it's locking."""
+    """
+    An asyncio.Lock subclass that is aware of the namespace that it's locking.
 
-    def __init__(self, namespace: str) -> None:
+    This class is DEPRECATED and will be removed in version 1.0.0. See the
+    docstring of the `namespace_lock` decorator for more information.
+    """
+
+    def __init__(self, namespace: str, *, warn: bool = True) -> None:
+        if warn:
+            warnings.warn(
+                "The use of `NamespaceLock` is deprecated. It will be removed "
+                "entirely in version 1.0.0.",
+                DeprecationWarning
+            )
+
         super().__init__()
         self._namespace = namespace
 
@@ -229,8 +243,38 @@ class NamespaceLock(asyncio.Lock):
         return f"<{cls} namespace={self._namespace!r} [{status}]>"
 
 
-def namespace_lock(method: Callable) -> Callable:
-    """Atomify the decorated method from a Redis perspective."""
+def namespace_lock(method: Callable, *, warn: bool = True) -> Callable:
+    """
+    Atomify the decorated method from a Redis perspective.
+
+    Namespace locks are DEPRECATED. The issue with namespace locks is that it is
+    very easy to implement something that will deadlock. They were used to wrap
+    compound methods that had to issue multiple Redis Commands to do their work.
+
+    The downside is that if one method uses another method internally, it needs
+    to make sure that the other method does not try to acquire the lock, as the
+    calling method already has it. If not, a deadlock will occur where the
+    method called internally is waiting for a lock that's acquired by its
+    caller, while the caller will only release the lock after the work is done.
+
+    Another downside is that in a multiple client setup, such a lock is specific
+    to a single client. This means that while atomicity is pseudo-guaranteed
+    within a client, race conditions between clients still occur.
+
+    To solve the issue, async-rediscache has switched to an approach using Redis
+    scripting that brings the atomicity of the entire operation to the side of
+    Redis again.
+
+    This decorator will be removed in version 1.0.0, but it's kept around with
+    a deprecation warning until it's removed.
+    """
+    if warn:
+        warnings.warn(
+            "The `namespace_lock` decorator is deprecated. It will be removed "
+            "completely in version 1.0.0.",
+            DeprecationWarning
+        )
+
     @functools.wraps(method)
     async def wrapper(self, *args, acquire_lock: bool = True, **kwargs) -> Any:  # noqa: ANN001
         """
@@ -248,7 +292,9 @@ def namespace_lock(method: Callable) -> Callable:
             # Check if we already have a lock for namespace; if not, create it.
             if namespace not in self._namespace_locks:
                 log.debug(f"Creating NamespaceLock for {namespace=}.")
-                self._namespace_locks[namespace] = NamespaceLock(namespace=namespace)
+                self._namespace_locks[namespace] = NamespaceLock(
+                    namespace=namespace, warn=warn
+                )
 
             # Get the lock for this namespace
             lock = self._namespace_locks[namespace]
@@ -265,3 +311,6 @@ def namespace_lock(method: Callable) -> Callable:
         return result
 
     return wrapper
+
+
+namespace_lock_no_warn = functools.partial(namespace_lock, warn=False)
