@@ -1,1 +1,2 @@
 recursive-exclude tests *
+recursive-include async_rediscache/redis_scripts *.lua

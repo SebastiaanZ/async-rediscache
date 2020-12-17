@@ -1,3 +1,7 @@
+[![Coverage Status](https://coveralls.io/repos/github/python-discord/async-rediscache/badge.svg?branch=master)](https://coveralls.io/github/python-discord/async-rediscache?branch=master)
+![Lint & Test](https://github.com/python-discord/async-rediscache/workflows/Lint%20&%20Test/badge.svg)
+![Release to PyPI](https://github.com/python-discord/async-rediscache/workflows/Release%20to%20PyPI/badge.svg)
+
 # Asynchronous Redis Cache
 This package offers several data types to ease working with a Redis cache in an asynchronous workflow. The package is currently in development and it's not recommended to start using it in production at this point.
 
