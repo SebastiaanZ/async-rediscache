@@ -14,5 +14,9 @@ class BaseRedisObjectTests(unittest.IsolatedAsyncioTestCase):
         self.mock_session.get_current_session.return_value = self.mock_session
         self.mock_session.pool = await fakeredis.aioredis.create_redis_pool()
 
+        # Flush everything from the database to prevent carry-overs between tests
+        with await self.mock_session.pool as connection:
+            await connection.flushall()
+
     async def asyncTearDown(self):
         self.patcher.stop()
