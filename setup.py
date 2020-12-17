@@ -34,7 +34,7 @@ setup(
     ],
     python_requires='~=3.7',
     extras_require={
-        "fakeredis": ["fakeredis>=1.3.1"],
+        "fakeredis": ["fakeredis[lua]>=1.4.4"],
     },
     include_package_data=True,
     zip_safe=False
