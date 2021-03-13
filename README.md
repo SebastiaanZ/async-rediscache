@@ -1,4 +1,4 @@
-[![Coverage Status](https://coveralls.io/repos/github/python-discord/async-rediscache/badge.svg?branch=master)](https://coveralls.io/github/python-discord/async-rediscache?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/python-discord/async-rediscache/badge.svg?branch=main)](https://coveralls.io/github/python-discord/async-rediscache?branch=main)
 ![Lint & Test](https://github.com/python-discord/async-rediscache/workflows/Lint%20&%20Test/badge.svg)
 ![Release to PyPI](https://github.com/python-discord/async-rediscache/workflows/Release%20to%20PyPI/badge.svg)
 
