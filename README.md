@@ -1,6 +1,6 @@
-[![Coverage Status](https://coveralls.io/repos/github/SebastiaanZ/async-rediscache/badge.svg?branch=main)](https://coveralls.io/github/python-discord/async-rediscache?branch=main)
-![Lint & Test](https://github.com/python-discord/SebastiaanZ/workflows/Lint%20&%20Test/badge.svg)
-![Release to PyPI](https://github.com/python-discord/SebastiaanZ/workflows/Release%20to%20PyPI/badge.svg)
+[![Coverage Status](https://coveralls.io/repos/github/SebastiaanZ/async-rediscache/badge.svg?branch=main)](https://coveralls.io/github/SebastiaanZ/async-rediscache?branch=main)
+[![Lint & Test](https://github.com/SebastiaanZ/async-rediscache/actions/workflows/lint_test.yaml/badge.svg)](https://github.com/SebastiaanZ/async-rediscache/actions/workflows/lint_test.yaml)
+[![Release to PyPI](https://github.com/SebastiaanZ/async-rediscache/actions/workflows/release.yaml/badge.svg)](https://github.com/SebastiaanZ/async-rediscache/actions/workflows/release.yaml)
 
 # Asynchronous Redis Cache
 This package offers several data types to ease working with a Redis cache in an asynchronous workflow. The package is currently in development and it's not recommended to start using it in production at this point.
