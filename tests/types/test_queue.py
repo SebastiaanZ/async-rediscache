@@ -111,9 +111,8 @@ class RedisTaskQueueTests(BaseRedisObjectTests):
         await self.queue.put(test_value)
         task = await self.queue.get()
 
-        with await self.mock_session.pool as connection:
-            queue_length = await connection.llen(self.queue.namespace)
-            pending_length = await connection.llen(self.queue.namespace_pending)
+        queue_length = await self.mock_session.client.llen(self.queue.namespace)
+        pending_length = await self.mock_session.client.llen(self.queue.namespace_pending)
 
         self.assertEqual(task.value, test_value)
         self.assertEqual(queue_length, 0)
@@ -129,15 +128,13 @@ class RedisTaskQueueTests(BaseRedisObjectTests):
         self.assertEqual(await self.queue.qsize(), 0)
         self.assertEqual(task.value, test_value)
 
-        with await self.mock_session.pool as connection:
-            pending_length = await connection.llen(self.queue.namespace_pending)
+        pending_length = await self.mock_session.client.llen(self.queue.namespace_pending)
 
         self.assertEqual(pending_length, 1)
 
         await task.finalize()
 
-        with await self.mock_session.pool as connection:
-            pending_length = await connection.llen(self.queue.namespace_pending)
+        pending_length = await self.mock_session.client.llen(self.queue.namespace_pending)
 
         self.assertEqual(pending_length, 0)
         self.assertTrue(task.done)
@@ -152,15 +149,13 @@ class RedisTaskQueueTests(BaseRedisObjectTests):
         self.assertEqual(await self.queue.qsize(), 0)
         self.assertEqual(task.value, test_value)
 
-        with await self.mock_session.pool as connection:
-            pending_length = await connection.llen(self.queue.namespace_pending)
+        pending_length = await self.mock_session.client.llen(self.queue.namespace_pending)
         self.assertEqual(pending_length, 1)
 
         await self.queue.reschedule_pending_task(task)
 
         self.assertEqual(await self.queue.qsize(), 1)
-        with await self.mock_session.pool as connection:
-            pending_length = await connection.llen(self.queue.namespace_pending)
+        pending_length = await self.mock_session.client.llen(self.queue.namespace_pending)
         self.assertEqual(pending_length, 0)
 
     async def test_reschedule_all_tasks_should_requeue_all_tasks(self) -> None:
@@ -177,15 +172,13 @@ class RedisTaskQueueTests(BaseRedisObjectTests):
             self.assertEqual(next(task_values_iter), task.value)
 
         self.assertEqual(await self.queue.qsize(), 0)
-        with await self.mock_session.pool as connection:
-            pending_length = await connection.llen(self.queue.namespace_pending)
+        pending_length = await self.mock_session.client.llen(self.queue.namespace_pending)
         self.assertEqual(pending_length, 10)
 
         await self.queue.reschedule_all_pending_client_tasks()
 
         self.assertEqual(await self.queue.qsize(), 10)
-        with await self.mock_session.pool as connection:
-            pending_length = await connection.llen(self.queue.namespace_pending)
+        pending_length = await self.mock_session.client.llen(self.queue.namespace_pending)
         self.assertEqual(pending_length, 0)
 
     async def test_task_raises_TaskAlreadyDone_for_second_finalize(self) -> None:
@@ -214,8 +207,7 @@ class RedisTaskQueueTests(BaseRedisObjectTests):
         await self.queue.reschedule_pending_task(value)
 
         self.assertEqual(await self.queue.qsize(), 1)
-        with await self.mock_session.pool as connection:
-            pending_length = await connection.llen(self.queue.namespace_pending)
+        pending_length = await self.mock_session.client.llen(self.queue.namespace_pending)
         self.assertEqual(pending_length, 0)
 
     async def test_rescheduling_unknown_task_raises_TaskNotPending(self) -> None:
@@ -260,18 +252,16 @@ class RedisTaskQueueMultipleClientsTests(BaseRedisObjectTests):
         self.assertEqual(await self.queue_one.qsize(), 0)
         self.assertEqual(await self.queue_one.qsize(), await self.queue_two.qsize())
 
-        with await self.mock_session.pool as connection:
-            pending_one_length = await connection.llen(self.queue_one.namespace_pending)
-            pending_two_length = await connection.llen(self.queue_two.namespace_pending)
+        pending_one_length = await self.mock_session.client.llen(self.queue_one.namespace_pending)
+        pending_two_length = await self.mock_session.client.llen(self.queue_two.namespace_pending)
 
         self.assertEqual(pending_one_length, len(values) // 2)
         self.assertEqual(pending_two_length, len(values) // 2)
 
         await self.queue_one.reschedule_all_pending_client_tasks()
 
-        with await self.mock_session.pool as connection:
-            pending_one_length = await connection.llen(self.queue_one.namespace_pending)
-            pending_two_length = await connection.llen(self.queue_two.namespace_pending)
+        pending_one_length = await self.mock_session.client.llen(self.queue_one.namespace_pending)
+        pending_two_length = await self.mock_session.client.llen(self.queue_two.namespace_pending)
 
         self.assertEqual(pending_one_length, 0)
         self.assertEqual(pending_two_length, len(values) // 2)
@@ -281,9 +271,8 @@ class RedisTaskQueueMultipleClientsTests(BaseRedisObjectTests):
 
         await self.queue_two.reschedule_all_pending_client_tasks()
 
-        with await self.mock_session.pool as connection:
-            pending_one_length = await connection.llen(self.queue_one.namespace_pending)
-            pending_two_length = await connection.llen(self.queue_two.namespace_pending)
+        pending_one_length = await self.mock_session.client.llen(self.queue_one.namespace_pending)
+        pending_two_length = await self.mock_session.client.llen(self.queue_two.namespace_pending)
 
         self.assertEqual(pending_one_length, 0)
         self.assertEqual(pending_two_length, 0)

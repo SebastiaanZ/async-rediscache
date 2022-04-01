@@ -58,12 +58,10 @@ class RedisObjectTests(unittest.IsolatedAsyncioTestCase):
         mock_session.get_current_session().global_namespace = ""
         self.assertEqual(Kyle.stanley.namespace, "python")
 
-    async def test_get_pool_connection_raises_without_set_namespace(self, _mock_session):
-        """Test if `get_pool_connection` raises exception if a namespace wasn't set."""
-        cache = types.RedisObject()
-
+    async def test_get_client_raises_without_set_namespace(self, _mock_session):
+        """Test if accessing the `redis_session` raises exception if a namespace wasn't set."""
         with self.assertRaises(types.NoNamespaceError):
-            await cache._get_pool_connection()
+            _ = types.RedisObject().redis_session
 
     def test_bypassing_global_namespace(self, mock_session):
         """Test if a RedisObject allows you to bypass the global namespace."""
@@ -72,30 +70,11 @@ class RedisObjectTests(unittest.IsolatedAsyncioTestCase):
         mock_session.get_current_session().global_namespace = "New"
         self.assertEqual(cache.namespace, "Amsterdam")
 
-    @staticmethod
-    def _get_pool_mock(mock_session):
-        """Get a properly mocked pool property."""
-        mock_session.get_current_session.return_value = mock_session
-        pool_mock = unittest.mock.AsyncMock()
-        type(mock_session).pool = property(fget=pool_mock)
-        return pool_mock
-
-    async def test_get_pool_connection_raises_exception_without_namespace(self, mock_session):
-        """Test if ._get_pool_connection raises NoNamespaceError without namespace."""
-        pool_mock = self._get_pool_mock(mock_session)
-        cache = types.RedisObject()
-
-        with self.assertRaises(types.NoNamespaceError):
-            await cache._get_pool_connection()
-        pool_mock.assert_not_awaited()
-
-    async def test_get_pool_connection_gets_pool_connection(self, mock_session):
-        """Test if ._get_pool_connection raises NoNamespaceError without namespace."""
-        pool_mock = self._get_pool_mock(mock_session)
+    async def test_redis_session_returns_correct_session(self, mock_session):
+        """Test if accessing the `redis_session` property returns the correct session."""
         cache = types.RedisObject(namespace="test")
-
-        await cache._get_pool_connection()
-        pool_mock.assert_awaited_once()
+        mock_session.get_current_session.return_value = mock_session
+        self.assertEqual(cache.redis_session, mock_session)
 
     def test_redis_session_property_gets_current_session(self, mock_session):
         """Test if the .redis_session property gets the current RedisSession."""
@@ -182,3 +161,38 @@ class RedisObjectTests(unittest.IsolatedAsyncioTestCase):
         # Assert that we've acquired and released the lock twice
         self.assertEqual(async_lock_context_manager.__aenter__.await_count, 2)
         self.assertEqual(async_lock_context_manager.__aexit__.await_count, 2)
+
+    def test_maybe_value(self, _):
+        """Test the deserialization of a valid `maybe_value`."""
+        cache = types.RedisObject(namespace="test")
+        value_string = "Hello!"
+        decoded = cache._maybe_value_from_typestring(cache._value_to_typestring(value_string))
+        self.assertEqual(value_string, decoded)
+
+    def test_maybe_encoded_value(self, _):
+        """Test the deserialization of a valid bytes `maybe_value`."""
+        cache = types.RedisObject(namespace="test")
+        value_string = "Hello!"
+        value = cache._value_to_typestring("Hello!").encode("utf-8")
+        decoded = cache._maybe_value_from_typestring(value)
+        self.assertEqual(value_string, decoded)
+
+    def test_maybe_error_value(self, _):
+        """Test that an exception is raised when value has an exception."""
+        cache = types.RedisObject(namespace="test")
+        exception_message = "This is a sample exception."
+        with self.assertRaises(ValueError) as exception:
+            cache._maybe_value_from_typestring(f"ValueError|{exception_message}")
+        self.assertEqual(
+            exception_message,
+            exception.exception.args[0],
+            "Function did not correctly read the exception message."
+        )
+
+    def test_maybe_empty_value(self, _):
+        """Test that the correct value is returned when deserializing a None value."""
+        cache = types.RedisObject(namespace="test")
+        for default in (None, "default value"):
+            with self.subTest(default=default):
+                value = cache._maybe_value_from_typestring(None, default=default)
+                self.assertEqual(default, value)
