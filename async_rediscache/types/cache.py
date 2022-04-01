@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, ItemsView, Optional
 
-from .base import RedisKeyType, RedisObject, RedisValueType, namespace_lock_no_warn
+from .base import RedisKeyType, RedisObject, RedisValueType
 
 __all__ = [
     "RedisCache",
@@ -67,7 +67,6 @@ class RedisCache(RedisObject):
         """Initialize the RedisCache."""
         super().__init__(*args, **kwargs)
 
-    @namespace_lock_no_warn
     async def set(self, key: RedisKeyType, value: RedisValueType) -> None:
         """Store an item in the Redis cache."""
         # Convert to a typestring and then set it
@@ -77,7 +76,6 @@ class RedisCache(RedisObject):
         log.debug(f"Setting {key} to {value}.")
         await self.redis_session.client.hset(self.namespace, key, value)
 
-    @namespace_lock_no_warn
     async def get(
             self, key: RedisKeyType, default: Optional[RedisValueType] = None
     ) -> Optional[RedisValueType]:
@@ -88,7 +86,6 @@ class RedisCache(RedisObject):
         value = await self.redis_session.client.hget(self.namespace, key)
         return self._maybe_value_from_typestring(value, default)
 
-    @namespace_lock_no_warn
     async def delete(self, key: RedisKeyType) -> None:
         """
         Delete an item from the Redis cache.
@@ -102,7 +99,6 @@ class RedisCache(RedisObject):
         log.debug(f"Attempting to delete {key}.")
         return await self.redis_session.client.hdel(self.namespace, key)
 
-    @namespace_lock_no_warn
     async def contains(self, key: RedisKeyType) -> bool:
         """
         Check if a key exists in the Redis cache.
@@ -115,7 +111,6 @@ class RedisCache(RedisObject):
         log.debug(f"Testing if {key} exists in the RedisCache - Result is {exists}")
         return exists
 
-    @namespace_lock_no_warn
     async def items(self) -> ItemsView:
         """
         Fetch all the key/value pairs in the cache.
@@ -137,25 +132,21 @@ class RedisCache(RedisObject):
         log.debug(f"Retrieving all key/value pairs from cache, total of {len(items)} items.")
         return items
 
-    @namespace_lock_no_warn
     async def length(self) -> int:
         """Return the number of items in the Redis cache."""
         number_of_items = await self.redis_session.client.hlen(self.namespace)
         log.debug(f"Returning length. Result is {number_of_items}.")
         return number_of_items
 
-    @namespace_lock_no_warn
     async def to_dict(self) -> Dict:
         """Convert to dict and return."""
-        return {key: value for key, value in await self.items(acquire_lock=False)}
+        return {key: value for key, value in await self.items()}
 
-    @namespace_lock_no_warn
     async def clear(self) -> None:
         """Deletes the entire hash from the Redis cache."""
         log.debug("Clearing the cache of all key/value pairs.")
         await self.redis_session.client.delete(self.namespace)
 
-    @namespace_lock_no_warn
     async def pop(
             self, key: RedisKeyType, default: Optional[RedisValueType] = None
     ) -> RedisValueType:
@@ -168,7 +159,6 @@ class RedisCache(RedisObject):
 
         return self._maybe_value_from_typestring(value, default)
 
-    @namespace_lock_no_warn
     async def update(self, items: Dict[RedisKeyType, RedisValueType]) -> None:
         """
         Update the Redis cache with multiple values.
@@ -187,7 +177,6 @@ class RedisCache(RedisObject):
             mapping=self._dict_to_typestring(items)
         )
 
-    @namespace_lock_no_warn
     async def increment(self, key: RedisKeyType, amount: Optional[float] = 1) -> float:
         """
         Increment the value by `amount`.

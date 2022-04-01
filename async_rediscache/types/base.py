@@ -5,7 +5,6 @@ import datetime
 import functools
 import importlib.resources
 import logging
-import warnings
 from functools import partialmethod
 from types import MethodType
 from typing import Any, Callable, Dict, Optional, Tuple, Union
@@ -18,9 +17,6 @@ __all__ = [
     "RedisKeyOrValue",
     "RedisKeyType",
     "RedisValueType",
-    "namespace_lock",
-    "namespace_lock_no_warn",
-    "NamespaceLock",
 ]
 
 log = logging.getLogger(__name__)
@@ -50,105 +46,6 @@ _ERROR_PREFIXES = (
 
 class NoNamespaceError(RuntimeError):
     """Raised when a RedisCache instance has no namespace."""
-
-
-class NamespaceLock(asyncio.Lock):
-    """
-    An asyncio.Lock subclass that is aware of the namespace that it's locking.
-
-    This class is DEPRECATED and will be removed in version 1.0.0. See the
-    docstring of the `namespace_lock` decorator for more information.
-    """
-
-    def __init__(self, namespace: str, *, warn: bool = True) -> None:
-        if warn:
-            warnings.warn(
-                "The use of `NamespaceLock` is deprecated. It will be removed "
-                "entirely in version 1.0.0.",
-                DeprecationWarning
-            )
-
-        super().__init__()
-        self._namespace = namespace
-
-    def __repr__(self) -> str:
-        """Create an insightful representation for this NamespaceLock object."""
-        status = "locked" if self.locked() else "unlocked"
-        cls = self.__class__.__name__
-        return f"<{cls} namespace={self._namespace!r} [{status}]>"
-
-
-def namespace_lock(method: Callable, *, warn: bool = True) -> Callable:
-    """
-    Atomify the decorated method from a Redis perspective.
-
-    Namespace locks are DEPRECATED. The issue with namespace locks is that it is
-    very easy to implement something that will deadlock. They were used to wrap
-    compound methods that had to issue multiple Redis Commands to do their work.
-
-    The downside is that if one method uses another method internally, it needs
-    to make sure that the other method does not try to acquire the lock, as the
-    calling method already has it. If not, a deadlock will occur where the
-    method called internally is waiting for a lock that's acquired by its
-    caller, while the caller will only release the lock after the work is done.
-
-    Another downside is that in a multiple client setup, such a lock is specific
-    to a single client. This means that while atomicity is pseudo-guaranteed
-    within a client, race conditions between clients still occur.
-
-    To solve the issue, async-rediscache has switched to an approach using Redis
-    scripting that brings the atomicity of the entire operation to the side of
-    Redis again.
-
-    This decorator will be removed in version 1.0.0, but it's kept around with
-    a deprecation warning until it's removed.
-    """
-    if warn:
-        warnings.warn(
-            "The `namespace_lock` decorator is deprecated. It will be removed "
-            "completely in version 1.0.0.",
-            DeprecationWarning
-        )
-
-    @functools.wraps(method)
-    async def wrapper(self, *args, acquire_lock: bool = True, **kwargs) -> Any:  # noqa: ANN001
-        """
-        Wrap the method in a function that automatically acquires a NamespaceLock.
-
-        If `acquire_lock` is `False`, acquiring the lock will be skipped. This
-        allows a compound method to call other methods without triggering a
-        deadlock situation.
-        """
-        coroutine_object = method(self, *args, **kwargs)
-        if acquire_lock:
-            # Get fully qualified namespace to fetch the correct lock
-            namespace = self.namespace
-
-            # Check if we already have a lock for namespace; if not, create it.
-            if namespace not in self._namespace_locks:
-                log.debug(f"Creating NamespaceLock for namespace={namespace!r}.")
-                self._namespace_locks[namespace] = NamespaceLock(
-                    namespace=namespace, warn=warn
-                )
-
-            # Get the lock for this namespace
-            lock = self._namespace_locks[namespace]
-
-            # Acquire lock
-            log.debug(f"Trying to acquire {lock} for {method.__qualname__}")
-            async with lock:
-                log.debug(f"Acquired {lock} for {method.__qualname__}")
-                result = await coroutine_object
-            log.debug(f"Released {lock} for {method.__qualname__}")
-        else:
-            result = await coroutine_object
-
-        return result
-
-    return wrapper
-
-
-namespace_lock_no_warn = functools.partial(namespace_lock, warn=False)
 
 
 class RedisObject:
@@ -356,7 +253,6 @@ class RedisObject:
 
         return wrapper
 
-    @namespace_lock_no_warn
     async def set_expiry(self, seconds: float) -> bool:
         """
         Set a time-to-live on the entire RedisCache namespace.
@@ -372,7 +268,6 @@ class RedisObject:
         result = await self.redis_session.client.pexpire(self.namespace, int(1000*seconds))
         return bool(result)
 
-    @namespace_lock_no_warn
     async def set_expiry_at(self, timestamp: Union[datetime.datetime, float]) -> bool:
         """
         Set a specific timestamp for the entire RedisCache to expire.

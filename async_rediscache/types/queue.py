@@ -8,7 +8,7 @@ from typing import Optional
 
 import aioredis
 
-from .base import RedisObject, RedisValueType, namespace_lock_no_warn
+from .base import RedisObject, RedisValueType
 
 __all__ = [
     "RedisQueue",
@@ -45,7 +45,6 @@ class RedisQueue(RedisObject):
     namespace as the `namespace` keyword argument to constructor.
     """
 
-    @namespace_lock_no_warn
     async def put(self, value: RedisValueType) -> None:
         """
         Remove and return a value from the queue.
@@ -65,7 +64,6 @@ class RedisQueue(RedisObject):
     # This method is provided to provide a compatible interface with Queue.SimpleQueue
     put_nowait = functools.partialmethod(put)
 
-    @namespace_lock_no_warn
     async def get(self, wait: bool = True, timeout: int = 0) -> Optional[RedisValueType]:
         """
         Remove and return a value from the queue.
@@ -105,7 +103,6 @@ class RedisQueue(RedisObject):
     # This method is provided to provide a compatible interface with Queue.SimpleQueue
     get_nowait = functools.partialmethod(get, wait=False)
 
-    @namespace_lock_no_warn
     async def qsize(self) -> int:
         """
         Return the (approximate) size of the RedisQueue.
@@ -116,14 +113,13 @@ class RedisQueue(RedisObject):
         """
         return await self.redis_session.client.llen(self.namespace)
 
-    @namespace_lock_no_warn
     async def empty(self) -> bool:
         """
         Return `True` if the RedisQueue is empty.
 
         The caveat that applies to the `qsize` method also applies here.
         """
-        return await self.qsize(acquire_lock=False) == 0
+        return await self.qsize() == 0
 
     async def iter_tasks(
             self, wait: bool = True, timeout: int = 0
@@ -156,7 +152,6 @@ class RedisTaskQueue(RedisQueue):
         client_id = f"{self.client_identifier}_" if self.client_identifier is not None else ""
         return f"{self.namespace}${client_id}pending"
 
-    @namespace_lock_no_warn
     async def get(self, wait: bool = True, timeout: int = 0) -> Optional[RedisTask]:
         """
         Get an item from the queue wrapped in a Task instance.
@@ -187,7 +182,6 @@ class RedisTaskQueue(RedisQueue):
         log.debug(f"got value `{value!r}` from RedisTaskQueue `{self.namespace}`")
         return value
 
-    @namespace_lock_no_warn
     async def task_done(self, task: RedisTask) -> None:
         """Mark a task as done by removing it from the pending tasks queue."""
         typestring = self._value_to_typestring(task.value)
@@ -198,7 +192,6 @@ class RedisTaskQueue(RedisQueue):
 
         task.done = True
 
-    @namespace_lock_no_warn
     async def reschedule_pending_task(self, task: typing.Union[RedisValueType. RedisTask]) -> None:
         """
         Move a `task` from the pending tasks queue back to the main queue.
@@ -224,7 +217,6 @@ class RedisTaskQueue(RedisQueue):
                 f"task `{task}` not found in pending tasks queue `{self.namespace_pending}`"
             ) from None
 
-    @namespace_lock_no_warn
     async def reschedule_all_pending_client_tasks(self) -> int:
         """
         Reschedule all pending tasks of this client.
