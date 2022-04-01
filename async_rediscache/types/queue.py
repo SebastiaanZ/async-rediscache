@@ -244,7 +244,7 @@ class RedisTask:
     task as done as long as the owner queue is still alive.
     """
 
-    def __init__(self, value: RedisValueType, owner: RedisQueue) -> None:
+    def __init__(self, value: RedisValueType, owner: RedisTaskQueue) -> None:
         self._value = value
         self.owner_reference = weakref.ref(owner)
         self.done = False
