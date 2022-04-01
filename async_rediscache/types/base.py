@@ -8,10 +8,7 @@ import logging
 import warnings
 from functools import partialmethod
 from types import MethodType
-from typing import Any, Callable
-from typing import Dict, Optional, Tuple, Union
-
-import aioredis
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 from ..session import RedisSession
 
@@ -129,7 +126,7 @@ def namespace_lock(method: Callable, *, warn: bool = True) -> Callable:
 
             # Check if we already have a lock for namespace; if not, create it.
             if namespace not in self._namespace_locks:
-                log.debug(f"Creating NamespaceLock for {namespace=}.")
+                log.debug(f"Creating NamespaceLock for namespace={namespace!r}.")
                 self._namespace_locks[namespace] = NamespaceLock(
                     namespace=namespace, warn=warn
                 )
@@ -193,7 +190,15 @@ class RedisObject:
 
     @property
     def redis_session(self) -> RedisSession:
-        """Get the current active RedisSession."""
+        """Get the current active RedisSession after validating a namespace was set."""
+        if self._local_namespace is None:
+            cls_name = self.__class__.__name__
+            error_message = (
+                f"can't get the redis session as the {cls_name} instance does not have a namespace."
+            )
+            log.critical(error_message)
+            raise NoNamespaceError(error_message)
+
         return RedisSession.get_current_session()
 
     @property
@@ -206,18 +211,6 @@ class RedisObject:
             namespace = self._local_namespace
 
         return namespace
-
-    async def _get_pool_connection(self) -> aioredis.commands.ContextRedis:
-        """Get a connection from the pool after validating a namespace was set."""
-        if self._local_namespace is None:
-            cls_name = self.__class__.__name__
-            error_message = (
-                f"can't get a pool connection as the {cls_name} instance does not have a namespace."
-            )
-            log.critical(error_message)
-            raise NoNamespaceError(error_message)
-
-        return await self.redis_session.pool
 
     @staticmethod
     def _to_typestring(key_or_value: RedisKeyOrValue, prefixes: _PrefixTuple) -> str:
@@ -237,7 +230,7 @@ class RedisObject:
 
     @staticmethod
     def _from_typestring(
-            key_or_value: Union[bytes, str], prefixes: _PrefixTuple
+        key_or_value: Union[bytes, str], prefixes: _PrefixTuple
     ) -> RedisKeyOrValue:
         """Deserialize a typestring into a valid Redis type."""
         # Stuff that comes out of Redis will be bytestrings, so let's decode those.
@@ -313,18 +306,14 @@ class RedisObject:
             digest = self._registered_scripts[script]
 
             # check if the script is already registered with redis
-            with await self._get_pool_connection() as connection:
-                [script_exists] = await connection.script_exists(digest)
+            [script_exists] = await self.redis_session.client.script_exists(digest)
 
             if script_exists:
                 return digest
 
         redis_script = importlib.resources.read_text("async_rediscache.redis_scripts", script)
         log.debug(f"Registering `{script}` script with Redis.")
-
-        with await self._get_pool_connection() as connection:
-            self._registered_scripts[script] = await connection.script_load(redis_script)
-
+        self._registered_scripts[script] = await self.redis_session.client.script_load(redis_script)
         return self._registered_scripts[script]
 
     def atomic_transaction(self, method: Callable) -> Callable:
@@ -380,9 +369,7 @@ class RedisObject:
         Note: Setting an expiry on a key within the namespace is not
         supported by Redis. It's the entire namespace or nothing.
         """
-        with await self._get_pool_connection() as connection:
-            result = await connection.pexpire(self.namespace, int(1000*seconds))
-
+        result = await self.redis_session.client.pexpire(self.namespace, int(1000*seconds))
         return bool(result)
 
     @namespace_lock_no_warn
@@ -399,7 +386,5 @@ class RedisObject:
         if isinstance(timestamp, datetime.datetime):
             timestamp = timestamp.timestamp()
 
-        with await self._get_pool_connection() as connection:
-            result = await connection.pexpireat(self.namespace, int(1000*timestamp))
-
+        result = await self.redis_session.client.pexpireat(self.namespace, int(1000*timestamp))
         return bool(result)

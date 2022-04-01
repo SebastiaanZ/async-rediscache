@@ -75,8 +75,7 @@ class RedisCache(RedisObject):
         value = self._value_to_typestring(value)
 
         log.debug(f"Setting {key} to {value}.")
-        with await self._get_pool_connection() as connection:
-            await connection.hset(self.namespace, key, value)
+        await self.redis_session.client.hset(self.namespace, key, value)
 
     @namespace_lock_no_warn
     async def get(
@@ -86,9 +85,7 @@ class RedisCache(RedisObject):
         key = self._key_to_typestring(key)
 
         log.debug(f"Attempting to retrieve {key}.")
-        with await self._get_pool_connection() as connection:
-            value = await connection.hget(self.namespace, key)
-
+        value = await self.redis_session.client.hget(self.namespace, key)
         return self._maybe_value_from_typestring(value, default)
 
     @namespace_lock_no_warn
@@ -103,8 +100,7 @@ class RedisCache(RedisObject):
         key = self._key_to_typestring(key)
 
         log.debug(f"Attempting to delete {key}.")
-        with await self._get_pool_connection() as connection:
-            return await connection.hdel(self.namespace, key)
+        return await self.redis_session.client.hdel(self.namespace, key)
 
     @namespace_lock_no_warn
     async def contains(self, key: RedisKeyType) -> bool:
@@ -114,8 +110,7 @@ class RedisCache(RedisObject):
         Return True if the key exists, otherwise False.
         """
         key = self._key_to_typestring(key)
-        with await self._get_pool_connection() as connection:
-            exists = await connection.hexists(self.namespace, key)
+        exists = await self.redis_session.client.hexists(self.namespace, key)
 
         log.debug(f"Testing if {key} exists in the RedisCache - Result is {exists}")
         return exists
@@ -137,17 +132,15 @@ class RedisCache(RedisObject):
         for key, value in items:
             # Iterate like a normal dictionary
         """
-        with await self._get_pool_connection() as connection:
-            items = self._dict_from_typestring(await connection.hgetall(self.namespace)).items()
-
+        items = await self.redis_session.client.hgetall(self.namespace)
+        items = self._dict_from_typestring(items).items()
         log.debug(f"Retrieving all key/value pairs from cache, total of {len(items)} items.")
         return items
 
     @namespace_lock_no_warn
     async def length(self) -> int:
         """Return the number of items in the Redis cache."""
-        with await self._get_pool_connection() as connection:
-            number_of_items = await connection.hlen(self.namespace)
+        number_of_items = await self.redis_session.client.hlen(self.namespace)
         log.debug(f"Returning length. Result is {number_of_items}.")
         return number_of_items
 
@@ -160,8 +153,7 @@ class RedisCache(RedisObject):
     async def clear(self) -> None:
         """Deletes the entire hash from the Redis cache."""
         log.debug("Clearing the cache of all key/value pairs.")
-        with await self._get_pool_connection() as connection:
-            await connection.delete(self.namespace)
+        await self.redis_session.client.delete(self.namespace)
 
     @namespace_lock_no_warn
     async def pop(
@@ -172,8 +164,7 @@ class RedisCache(RedisObject):
         key = self._key_to_typestring(key)
 
         log.debug(f"Popping {key!r} from the cache.")
-        with await self._get_pool_connection() as connection:
-            value = await connection.evalsha(pop_script, keys=[self.namespace, key])
+        value = await self.redis_session.client.evalsha(pop_script, 2, self.namespace, key)
 
         return self._maybe_value_from_typestring(value, default)
 
@@ -191,8 +182,10 @@ class RedisCache(RedisObject):
         must consist of valid RedisKeyTypes and RedisValueTypes.
         """
         log.debug(f"Updating the cache with the following items:\n{items}")
-        with await self._get_pool_connection() as connection:
-            await connection.hmset_dict(self.namespace, self._dict_to_typestring(items))
+        await self.redis_session.client.hset(
+            self.namespace,
+            mapping=self._dict_to_typestring(items)
+        )
 
     @namespace_lock_no_warn
     async def increment(self, key: RedisKeyType, amount: Optional[float] = 1) -> float:
@@ -211,12 +204,10 @@ class RedisCache(RedisObject):
             raise TypeError("the increment amount must be an `int` or `float`.")
 
         increment_script = await self._load_script("rediscache_increment.lua")
-        with await self._get_pool_connection() as connection:
-            value = await connection.evalsha(
-                increment_script,
-                keys=[self.namespace, self._key_to_typestring(key)],
-                args=[self._value_to_typestring(amount)]
-            )
+
+        keys = [self.namespace, self._key_to_typestring(key)]
+        args = [self._value_to_typestring(amount)]
+        value = await self.redis_session.client.evalsha(increment_script, len(keys), *keys, *args)
 
         return self._maybe_value_from_typestring(value)
 

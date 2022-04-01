@@ -28,23 +28,22 @@ pip install async-rediscache[fakeredis]
 ## Basic use
 
 ### Creating a `RedisSession`
-To use a `RedisCache`, you first have to create a `RedisSession` instance that manages the connection pool to Redis. You can create the `RedisSession` at any point but make sure to call the `connect` method from an asynchronous context (see [this explanation](https://docs.aiohttp.org/en/stable/faq.html#why-is-creating-a-clientsession-outside-of-an-event-loop-dangerous) for why).
+To use a `RedisCache`, you first have to create a `RedisSession` instance that manages the connection to Redis. You can create the `RedisSession` at any point but make sure to call the `connect` method from an asynchronous context (see [this explanation](https://docs.aiohttp.org/en/stable/faq.html#why-is-creating-a-clientsession-outside-of-an-event-loop-dangerous) for why).
 
 ```python
 import async_rediscache
 
 async def main():
-    session = async_rediscache.RedisSession()
+    session = async_rediscache.RedisSession("redis://localhost")
     await session.connect()
 
     # Do something interesting
-    
-    await session.close()
 ```
 
 ### Creating a `RedisSession` with a network connection
 
 ```python
+import async_rediscache
 async def main():
     connection = {"address": "redis://127.0.0.1:6379"}
     async_rediscache.RedisSession(**connection)
@@ -84,7 +83,7 @@ Here are some usage examples:
 import async_rediscache
 
 async def main():
-    session = async_rediscache.RedisSession()
+    session = async_rediscache.RedisSession("redis://localhost")
     await session.connect()
 
     cache = async_rediscache.RedisCache(namespace="python")
@@ -110,8 +109,6 @@ async def main():
     await cache.delete("Barry")
     await cache.increment("Brett", 1)  # Increment Brett's int by 1
     await cache.clear()
-
-    await session.close()
 ```
 
 #### `RedisQueue`

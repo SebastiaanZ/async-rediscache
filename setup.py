@@ -31,11 +31,11 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     install_requires=[
-        "aioredis>=1"
+        "aioredis~=2.0"
     ],
     python_requires='~=3.7',
     extras_require={
-        "fakeredis": ["fakeredis[lua]>=1.4.4"],
+        "fakeredis": ["fakeredis[lua]>=1.7.1"],
     },
     include_package_data=True,
     zip_safe=False

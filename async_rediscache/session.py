@@ -4,7 +4,7 @@ import logging
 
 import aioredis
 
-__all__ = ['RedisSession', 'RedisSessionClosed', 'RedisSessionNotInitialized']
+__all__ = ['RedisSession', 'RedisSessionNotInitialized', 'RedisSessionNotConnected']
 
 log = logging.getLogger(__name__)
 
@@ -13,8 +13,8 @@ class RedisSessionNotInitialized(RuntimeError):
     """Raised when the RedisSession instance has not been initialized yet."""
 
 
-class RedisSessionClosed(RuntimeError):
-    """Exception raised when something attempts operations on a closed redis session."""
+class RedisSessionNotConnected(RuntimeError):
+    """Raised when trying to access the Redis client before a connection has been created."""
 
 
 class FakeRedisNotInstalled(ImportError):
@@ -55,22 +55,26 @@ class RedisSession(metaclass=RedisSingleton):
     creates it, run the loop until the `connect` coroutine is completed, and
     passing the loop to `discord.ext.commands.Bot.__init__` afterwards.
 
+    The `url` argument, and kwargs are passed directly to the `aioredis.from_url` method.
+
     Example:
-        redis_session = RedisSession()
+        redis_session = RedisSession("redis://localhost")
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(redis_session.connect(...))
+        loop.run_until_complete(redis_session.connect())
         bot = discord.ext.commands.Bot(..., loop=loop)
     """
 
     _instance: RedisSession = None
 
     def __init__(
-            self, *, global_namespace: str = "", use_fakeredis: bool = False, **session_kwargs
+        self, url: str, *, global_namespace: str = "", use_fakeredis: bool = False, **session_kwargs
     ) -> None:
         self.global_namespace = global_namespace
-        self._pool = None
+        self.url = url
+        self._client = None
         self._session_kwargs = session_kwargs
         self._use_fakeredis = use_fakeredis
+        self.connected = False
 
     @classmethod
     def get_current_session(cls) -> RedisSession:
@@ -86,28 +90,22 @@ class RedisSession(metaclass=RedisSingleton):
         return cls._instance
 
     @property
-    def pool(self) -> aioredis.Redis:
+    def client(self) -> aioredis.Redis:
         """
-        Get the connection pool after checking if it is still connected.
+        Get the redis client object to perform commands on.
 
-        This property will raise a `RedisSessionClosed` if it's accessed after
-        the pool has been closed.
+        This property will raise a `RedisSessionNotConnected` if it is accessed
+        before the connect method is called.
         """
-        if self._pool.closed:
-            raise RedisSessionClosed(
-                "attempting to access connections pool after it has been closed."
+        if not self.connected:
+            raise RedisSessionNotConnected(
+                "attempting to access the client before the connection has been created."
             )
-
-        return self._pool
-
-    @property
-    def closed(self) -> bool:
-        """Return whether or not the RedisSession is closed."""
-        return self._pool is None or self._pool.closed
+        return self._client
 
     async def connect(self) -> None:
-        """Connect to Redis by creating the connections pool."""
-        log.debug("Creating Redis connections pool.")
+        """Connect to Redis by instantiating the redis instance."""
+        log.debug("Creating Redis client.")
 
         # Decide if we want to use `fakeredis` or an actual Redis server. The
         # option to use `fakeredis.aioredis` is provided to aid with running the
@@ -126,18 +124,20 @@ class RedisSession(metaclass=RedisSingleton):
                 )
 
             kwargs = dict(self._session_kwargs)
+            # Match the behavior of `aioredis.from_url` by updating the kwargs using the URL
+            url_options = aioredis.connection.parse_url(self.url)
+            kwargs.update(dict(url_options))
 
-            # the `address` and `password` kwargs are not supported by redis
-            kwargs.pop("address", None)
-            kwargs.pop("password", None)
+            # the following kwargs are not supported by fakeredis
+            [kwargs.pop(kwarg, None) for kwarg in (
+                "address", "username", "password", "port", "timeout"
+            )]
 
-            pool_constructor = fakeredis.aioredis.create_redis_pool(**kwargs)
+            self._client = fakeredis.aioredis.FakeRedis(**kwargs)
         else:
-            pool_constructor = aioredis.create_redis_pool(**self._session_kwargs)
+            self._client = aioredis.from_url(self.url, **self._session_kwargs)
 
-        self._pool = await pool_constructor
-
-    async def close(self) -> None:
-        """Close the pool and wait for pending operations to be processed."""
-        self._pool.close()
-        await self._pool.wait_closed()
+        # The connection pool client does not expose any way to connect to the server, so
+        # we try to perform a request to confirm the connection
+        await self._client.ping()
+        self.connected = True
