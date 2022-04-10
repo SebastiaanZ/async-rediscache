@@ -128,7 +128,7 @@ class RedisSession(metaclass=RedisSingleton):
             url_options = aioredis.connection.parse_url(self.url)
             kwargs.update(dict(url_options))
 
-            # the following kwargs are not supported by fakeredis
+            # The following kwargs are not supported by fakeredis
             [kwargs.pop(kwarg, None) for kwarg in (
                 "address", "username", "password", "port", "timeout"
             )]
