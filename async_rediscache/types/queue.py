@@ -8,8 +8,7 @@ from typing import Optional
 
 import aioredis
 
-from .base import RedisObject, RedisValueType, namespace_lock_no_warn
-
+from .base import RedisObject, RedisValueType
 
 __all__ = [
     "RedisQueue",
@@ -46,7 +45,6 @@ class RedisQueue(RedisObject):
     namespace as the `namespace` keyword argument to constructor.
     """
 
-    @namespace_lock_no_warn
     async def put(self, value: RedisValueType) -> None:
         """
         Remove and return a value from the queue.
@@ -61,13 +59,11 @@ class RedisQueue(RedisObject):
         """
         value_string = self._value_to_typestring(value)
         log.debug(f"putting {value_string!r} on RedisQueue `{self.namespace}`")
-        with await self._get_pool_connection() as connection:
-            await connection.lpush(self.namespace, value_string)
+        await self.redis_session.client.lpush(self.namespace, value_string)
 
     # This method is provided to provide a compatible interface with Queue.SimpleQueue
     put_nowait = functools.partialmethod(put)
 
-    @namespace_lock_no_warn
     async def get(self, wait: bool = True, timeout: int = 0) -> Optional[RedisValueType]:
         """
         Remove and return a value from the queue.
@@ -85,19 +81,18 @@ class RedisQueue(RedisObject):
             f"(wait={wait!r}, timeout={timeout!r})"
         )
 
-        with await self._get_pool_connection() as connection:
-            if wait:
-                value = await connection.brpop(self.namespace, timeout=timeout)
+        if wait:
+            value = await self.redis_session.client.brpop(self.namespace, timeout=timeout)
 
-                # If we can get an item from the queue before the timeout runs
-                # out, we get a list back, in the form `[namespace, value]`. If
-                # no value was received before the timeout, we simply get `None`
-                # back. This means we need to get the value out of the list when
-                # we actually got a value back instead of `None`.
-                if value:
-                    _, value = value
-            else:
-                value = await connection.rpop(self.namespace)
+            # If we can get an item from the queue before the timeout runs
+            # out, we get a list back, in the form `[namespace, value]`. If
+            # no value was received before the timeout, we simply get `None`
+            # back. This means we need to get the value out of the list when
+            # we actually got a value back instead of `None`.
+            if value:
+                _, value = value
+        else:
+            value = await self.redis_session.client.rpop(self.namespace)
 
         if value is not None:
             value = self._value_from_typestring(value)
@@ -108,7 +103,6 @@ class RedisQueue(RedisObject):
     # This method is provided to provide a compatible interface with Queue.SimpleQueue
     get_nowait = functools.partialmethod(get, wait=False)
 
-    @namespace_lock_no_warn
     async def qsize(self) -> int:
         """
         Return the (approximate) size of the RedisQueue.
@@ -117,17 +111,15 @@ class RedisQueue(RedisObject):
         moment Redis receives the request, this value may have become stale
         before we received it back.
         """
-        with await self._get_pool_connection() as connection:
-            return await connection.llen(self.namespace)
+        return await self.redis_session.client.llen(self.namespace)
 
-    @namespace_lock_no_warn
     async def empty(self) -> bool:
         """
         Return `True` if the RedisQueue is empty.
 
         The caveat that applies to the `qsize` method also applies here.
         """
-        return await self.qsize(acquire_lock=False) == 0
+        return await self.qsize() == 0
 
     async def iter_tasks(
             self, wait: bool = True, timeout: int = 0
@@ -160,7 +152,6 @@ class RedisTaskQueue(RedisQueue):
         client_id = f"{self.client_identifier}_" if self.client_identifier is not None else ""
         return f"{self.namespace}${client_id}pending"
 
-    @namespace_lock_no_warn
     async def get(self, wait: bool = True, timeout: int = 0) -> Optional[RedisTask]:
         """
         Get an item from the queue wrapped in a Task instance.
@@ -178,12 +169,11 @@ class RedisTaskQueue(RedisQueue):
             f"(wait={wait!r}, timeout={timeout!r})"
         )
 
-        namespaces = {"sourcekey": self.namespace, "destkey": self.namespace_pending}
-        with await self._get_pool_connection() as connection:
-            if wait:
-                value = await connection.brpoplpush(**namespaces, timeout=timeout)
-            else:
-                value = await connection.rpoplpush(**namespaces)
+        namespaces = {"src": self.namespace, "dst": self.namespace_pending}
+        if wait:
+            value = await self.redis_session.client.brpoplpush(**namespaces, timeout=timeout)
+        else:
+            value = await self.redis_session.client.rpoplpush(**namespaces)
 
         if value is not None:
             value = self._value_from_typestring(value)
@@ -192,19 +182,16 @@ class RedisTaskQueue(RedisQueue):
         log.debug(f"got value `{value!r}` from RedisTaskQueue `{self.namespace}`")
         return value
 
-    @namespace_lock_no_warn
     async def task_done(self, task: RedisTask) -> None:
         """Mark a task as done by removing it from the pending tasks queue."""
         typestring = self._value_to_typestring(task.value)
-        with await self._get_pool_connection() as connection:
-            removed = await connection.lrem(self.namespace_pending, 1, typestring)
+        removed = await self.redis_session.client.lrem(self.namespace_pending, 1, typestring)
 
         if not removed:
             raise TaskNotPending(f"task {task.value!r} was not found in the pending tasks queue.")
 
         task.done = True
 
-    @namespace_lock_no_warn
     async def reschedule_pending_task(self, task: typing.Union[RedisValueType. RedisTask]) -> None:
         """
         Move a `task` from the pending tasks queue back to the main queue.
@@ -221,19 +208,15 @@ class RedisTaskQueue(RedisQueue):
 
         reschedule_script = await self._load_script("redisqueue_reschedule_task.lua")
 
-        with await self._get_pool_connection() as connection:
-            try:
-                await connection.evalsha(
-                    reschedule_script,
-                    keys=[self.namespace, self.namespace_pending],
-                    args=[self._value_to_typestring(task)],
-                )
-            except aioredis.ReplyError:
-                raise TaskNotPending(
-                    f"task `{task!r}` not found in pending tasks queue `{self.namespace_pending}`"
-                ) from None
+        try:
+            keys = [self.namespace, self.namespace_pending]
+            args = [self._value_to_typestring(task)]
+            await self.redis_session.client.evalsha(reschedule_script, len(keys), *keys, *args)
+        except aioredis.ResponseError:
+            raise TaskNotPending(
+                f"task `{task}` not found in pending tasks queue `{self.namespace_pending}`"
+            ) from None
 
-    @namespace_lock_no_warn
     async def reschedule_all_pending_client_tasks(self) -> int:
         """
         Reschedule all pending tasks of this client.
@@ -243,11 +226,12 @@ class RedisTaskQueue(RedisQueue):
         information.
         """
         reschedule_script = await self._load_script("redisqueue_reschedule_all_client_tasks.lua")
-        with await self._get_pool_connection() as connection:
-            rescheduled_tasks = await connection.evalsha(
-                reschedule_script,
-                keys=[self.namespace, self.namespace_pending],
-            )
+        rescheduled_tasks = await self.redis_session.client.evalsha(
+            reschedule_script,
+            2,
+            self.namespace,
+            self.namespace_pending,
+        )
 
         return int(rescheduled_tasks)
 
@@ -260,7 +244,7 @@ class RedisTask:
     task as done as long as the owner queue is still alive.
     """
 
-    def __init__(self, value: RedisValueType, owner: RedisQueue) -> None:
+    def __init__(self, value: RedisValueType, owner: RedisTaskQueue) -> None:
         self._value = value
         self.owner_reference = weakref.ref(owner)
         self.done = False

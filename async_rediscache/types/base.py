@@ -5,13 +5,9 @@ import datetime
 import functools
 import importlib.resources
 import logging
-import warnings
 from functools import partialmethod
 from types import MethodType
-from typing import Any, Callable
-from typing import Dict, Optional, Tuple, Union
-
-import aioredis
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 from ..session import RedisSession
 
@@ -21,9 +17,6 @@ __all__ = [
     "RedisKeyOrValue",
     "RedisKeyType",
     "RedisValueType",
-    "namespace_lock",
-    "namespace_lock_no_warn",
-    "NamespaceLock",
 ]
 
 log = logging.getLogger(__name__)
@@ -53,105 +46,6 @@ _ERROR_PREFIXES = (
 
 class NoNamespaceError(RuntimeError):
     """Raised when a RedisCache instance has no namespace."""
-
-
-class NamespaceLock(asyncio.Lock):
-    """
-    An asyncio.Lock subclass that is aware of the namespace that it's locking.
-
-    This class is DEPRECATED and will be removed in version 1.0.0. See the
-    docstring of the `namespace_lock` decorator for more information.
-    """
-
-    def __init__(self, namespace: str, *, warn: bool = True) -> None:
-        if warn:
-            warnings.warn(
-                "The use of `NamespaceLock` is deprecated. It will be removed "
-                "entirely in version 1.0.0.",
-                DeprecationWarning
-            )
-
-        super().__init__()
-        self._namespace = namespace
-
-    def __repr__(self) -> str:
-        """Create an insightful representation for this NamespaceLock object."""
-        status = "locked" if self.locked() else "unlocked"
-        cls = self.__class__.__name__
-        return f"<{cls} namespace={self._namespace!r} [{status}]>"
-
-
-def namespace_lock(method: Callable, *, warn: bool = True) -> Callable:
-    """
-    Atomify the decorated method from a Redis perspective.
-
-    Namespace locks are DEPRECATED. The issue with namespace locks is that it is
-    very easy to implement something that will deadlock. They were used to wrap
-    compound methods that had to issue multiple Redis Commands to do their work.
-
-    The downside is that if one method uses another method internally, it needs
-    to make sure that the other method does not try to acquire the lock, as the
-    calling method already has it. If not, a deadlock will occur where the
-    method called internally is waiting for a lock that's acquired by its
-    caller, while the caller will only release the lock after the work is done.
-
-    Another downside is that in a multiple client setup, such a lock is specific
-    to a single client. This means that while atomicity is pseudo-guaranteed
-    within a client, race conditions between clients still occur.
-
-    To solve the issue, async-rediscache has switched to an approach using Redis
-    scripting that brings the atomicity of the entire operation to the side of
-    Redis again.
-
-    This decorator will be removed in version 1.0.0, but it's kept around with
-    a deprecation warning until it's removed.
-    """
-    if warn:
-        warnings.warn(
-            "The `namespace_lock` decorator is deprecated. It will be removed "
-            "completely in version 1.0.0.",
-            DeprecationWarning
-        )
-
-    @functools.wraps(method)
-    async def wrapper(self, *args, acquire_lock: bool = True, **kwargs) -> Any:  # noqa: ANN001
-        """
-        Wrap the method in a function that automatically acquires a NamespaceLock.
-
-        If `acquire_lock` is `False`, acquiring the lock will be skipped. This
-        allows a compound method to call other methods without triggering a
-        deadlock situation.
-        """
-        coroutine_object = method(self, *args, **kwargs)
-        if acquire_lock:
-            # Get fully qualified namespace to fetch the correct lock
-            namespace = self.namespace
-
-            # Check if we already have a lock for namespace; if not, create it.
-            if namespace not in self._namespace_locks:
-                log.debug(f"Creating NamespaceLock for {namespace=}.")
-                self._namespace_locks[namespace] = NamespaceLock(
-                    namespace=namespace, warn=warn
-                )
-
-            # Get the lock for this namespace
-            lock = self._namespace_locks[namespace]
-
-            # Acquire lock
-            log.debug(f"Trying to acquire {lock} for {method.__qualname__}")
-            async with lock:
-                log.debug(f"Acquired {lock} for {method.__qualname__}")
-                result = await coroutine_object
-            log.debug(f"Released {lock} for {method.__qualname__}")
-        else:
-            result = await coroutine_object
-
-        return result
-
-    return wrapper
-
-
-namespace_lock_no_warn = functools.partial(namespace_lock, warn=False)
 
 
 class RedisObject:
@@ -193,7 +87,15 @@ class RedisObject:
 
     @property
     def redis_session(self) -> RedisSession:
-        """Get the current active RedisSession."""
+        """Get the current active RedisSession after validating a namespace was set."""
+        if self._local_namespace is None:
+            cls_name = self.__class__.__name__
+            error_message = (
+                f"can't get the redis session as the {cls_name} instance does not have a namespace."
+            )
+            log.critical(error_message)
+            raise NoNamespaceError(error_message)
+
         return RedisSession.get_current_session()
 
     @property
@@ -206,18 +108,6 @@ class RedisObject:
             namespace = self._local_namespace
 
         return namespace
-
-    async def _get_pool_connection(self) -> aioredis.commands.ContextRedis:
-        """Get a connection from the pool after validating a namespace was set."""
-        if self._local_namespace is None:
-            cls_name = self.__class__.__name__
-            error_message = (
-                f"can't get a pool connection as the {cls_name} instance does not have a namespace."
-            )
-            log.critical(error_message)
-            raise NoNamespaceError(error_message)
-
-        return await self.redis_session.pool
 
     @staticmethod
     def _to_typestring(key_or_value: RedisKeyOrValue, prefixes: _PrefixTuple) -> str:
@@ -237,7 +127,7 @@ class RedisObject:
 
     @staticmethod
     def _from_typestring(
-            key_or_value: Union[bytes, str], prefixes: _PrefixTuple
+        key_or_value: Union[bytes, str], prefixes: _PrefixTuple
     ) -> RedisKeyOrValue:
         """Deserialize a typestring into a valid Redis type."""
         # Stuff that comes out of Redis will be bytestrings, so let's decode those.
@@ -313,18 +203,14 @@ class RedisObject:
             digest = self._registered_scripts[script]
 
             # check if the script is already registered with redis
-            with await self._get_pool_connection() as connection:
-                [script_exists] = await connection.script_exists(digest)
+            [script_exists] = await self.redis_session.client.script_exists(digest)
 
             if script_exists:
                 return digest
 
         redis_script = importlib.resources.read_text("async_rediscache.redis_scripts", script)
         log.debug(f"Registering `{script}` script with Redis.")
-
-        with await self._get_pool_connection() as connection:
-            self._registered_scripts[script] = await connection.script_load(redis_script)
-
+        self._registered_scripts[script] = await self.redis_session.client.script_load(redis_script)
         return self._registered_scripts[script]
 
     def atomic_transaction(self, method: Callable) -> Callable:
@@ -367,7 +253,6 @@ class RedisObject:
 
         return wrapper
 
-    @namespace_lock_no_warn
     async def set_expiry(self, seconds: float) -> bool:
         """
         Set a time-to-live on the entire RedisCache namespace.
@@ -380,12 +265,9 @@ class RedisObject:
         Note: Setting an expiry on a key within the namespace is not
         supported by Redis. It's the entire namespace or nothing.
         """
-        with await self._get_pool_connection() as connection:
-            result = await connection.pexpire(self.namespace, int(1000*seconds))
-
+        result = await self.redis_session.client.pexpire(self.namespace, int(1000*seconds))
         return bool(result)
 
-    @namespace_lock_no_warn
     async def set_expiry_at(self, timestamp: Union[datetime.datetime, float]) -> bool:
         """
         Set a specific timestamp for the entire RedisCache to expire.
@@ -399,7 +281,5 @@ class RedisObject:
         if isinstance(timestamp, datetime.datetime):
             timestamp = timestamp.timestamp()
 
-        with await self._get_pool_connection() as connection:
-            result = await connection.pexpireat(self.namespace, int(1000*timestamp))
-
+        result = await self.redis_session.client.pexpireat(self.namespace, int(1000*timestamp))
         return bool(result)
