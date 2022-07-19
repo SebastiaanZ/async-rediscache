@@ -9,7 +9,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="async-rediscache",
-    version="1.0.0",
+    version="1.0.0rc1",
     description="An easy to use asynchronous Redis cache",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
