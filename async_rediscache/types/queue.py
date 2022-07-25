@@ -6,7 +6,7 @@ import typing
 import weakref
 from typing import Optional
 
-import aioredis
+import redis
 
 from .base import RedisObject, RedisValueType
 
@@ -192,7 +192,7 @@ class RedisTaskQueue(RedisQueue):
 
         task.done = True
 
-    async def reschedule_pending_task(self, task: typing.Union[RedisValueType. RedisTask]) -> None:
+    async def reschedule_pending_task(self, task: typing.Union[RedisValueType, RedisTask]) -> None:
         """
         Move a `task` from the pending tasks queue back to the main queue.
 
@@ -212,7 +212,7 @@ class RedisTaskQueue(RedisQueue):
             keys = [self.namespace, self.namespace_pending]
             args = [self._value_to_typestring(task)]
             await self.redis_session.client.evalsha(reschedule_script, len(keys), *keys, *args)
-        except aioredis.ResponseError:
+        except redis.ResponseError:
             raise TaskNotPending(
                 f"task `{task}` not found in pending tasks queue `{self.namespace_pending}`"
             ) from None
