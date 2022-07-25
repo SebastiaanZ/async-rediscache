@@ -127,6 +127,8 @@ class RedisSession(metaclass=RedisSingleton):
         Connect to Redis by instantiating the redis instance.
 
         If ping is True, a PING will be performed to ensure the connection is valid.
+        If it's False, it'll be assumed the session is valid, and it's up to the user to
+        manage when it's not.
         """
         log.debug("Creating Redis client.")
 
@@ -158,6 +160,6 @@ class RedisSession(metaclass=RedisSingleton):
         if ping:
             # Perform a PING to confirm the connection is valid
             await self._client.ping()
-            self.valid = True
 
+        self.valid = True
         return self
