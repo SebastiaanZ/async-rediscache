@@ -18,6 +18,7 @@ setup(
     url="https://github.com/python-discord/async-rediscache",
     license="MIT",
     packages=find_packages(exclude=["tests", "tests.*"]),
+    package_data={"async_rediscache": ["py.typed"]},
     classifiers=[
         "License :: OSI Approved :: MIT License",
         "Development Status :: 4 - Beta",
