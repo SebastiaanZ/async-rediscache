@@ -86,11 +86,12 @@ class RedisCache(RedisObject):
         value = await self.redis_session.client.hget(self.namespace, key)
         return self._maybe_value_from_typestring(value, default)
 
-    async def delete(self, key: RedisKeyType) -> None:
+    async def delete(self, key: RedisKeyType) -> int:
         """
         Delete an item from the Redis cache.
 
         If we try to delete a key that does not exist, it will simply be ignored.
+        Returns the number of deleted keys.
 
         See https://redis.io/commands/hdel for more info on how this works.
         """

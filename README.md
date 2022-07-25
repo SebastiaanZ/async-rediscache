@@ -34,7 +34,7 @@ To use a `RedisCache`, you first have to create a `RedisSession` instance that m
 import async_rediscache
 
 async def main():
-    session = async_rediscache.RedisSession("redis://localhost")
+    session = async_rediscache.RedisSession(host="localhost")
     await session.connect()
 
     # Do something interesting
@@ -83,7 +83,7 @@ Here are some usage examples:
 import async_rediscache
 
 async def main():
-    session = async_rediscache.RedisSession("redis://localhost")
+    session = async_rediscache.RedisSession(host="localhost")
     await session.connect()
 
     cache = async_rediscache.RedisCache(namespace="python")
