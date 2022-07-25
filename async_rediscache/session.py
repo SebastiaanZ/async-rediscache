@@ -15,7 +15,7 @@ class RedisSessionNotInitialized(RuntimeError):
 
 
 class RedisSessionNotConnected(RuntimeError):
-    """Raised when trying to access the Redis client before connect has been called."""
+    """Raised when trying to access the Redis client before `connect` has been called."""
 
 
 class FakeRedisNotInstalled(ImportError):
