@@ -3,15 +3,13 @@ name: Release to PyPI
 on:
   release:
     types: [published]
-    tags-ignore:
-      - '**dev**'
-      - '**rc**'
 
 
 jobs:
   build:
     name: Build dist & publish
     runs-on: ubuntu-18.04
+    if: ! ${{ contains(github.ref, 'dev') || contains(github.ref, 'rc') }}
 
     steps:
     - name: Checkout the repo and the submodules.
