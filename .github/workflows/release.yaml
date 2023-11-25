@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: Build dist & publish
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     if: ! ${{ contains(github.ref, 'dev') || contains(github.ref, 'rc') }}
 
     steps:
@@ -25,6 +25,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install setuptools wheel
         python setup.py sdist bdist_wheel
+
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@v1.3.1
       with:

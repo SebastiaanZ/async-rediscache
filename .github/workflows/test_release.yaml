@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     name: Build dist & publish to test.pypi.org
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout the repo and the submodules.
@@ -25,6 +25,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install setuptools wheel
         python setup.py sdist bdist_wheel
+
     - name: Publish dev/rc build to test.pypi.org
       uses: pypa/gh-action-pypi-publish@v1.3.1
       with:
