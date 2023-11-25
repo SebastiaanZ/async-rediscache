@@ -115,11 +115,14 @@ class RedisSession(metaclass=RedisSingleton):
         before the connect method is called.
         """
         # The validation and error logic is handled by the client property
-        warnings.warn(DeprecationWarning(
-            "pool property is deprecated. Most operations should be performed on "
-            "the client directly. Operations which benefit from managing the pool directly "
-            "can access it from client.connection_pool."
-        ))
+        warnings.warn(
+            DeprecationWarning(
+                "pool property is deprecated. Most operations should be performed on "
+                "the client directly. Operations which benefit from managing the pool directly "
+                "can access it from client.connection_pool.",
+            ),
+            stacklevel=2,
+        )
         return self.client.connection_pool
 
     async def connect(self, *, ping: bool = True) -> RedisSession:
