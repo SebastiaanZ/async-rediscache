@@ -9,7 +9,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="async-rediscache",
-    version="1.0.0rc2",
+    version="1.0.0rc3",
     description="An easy to use asynchronous Redis cache",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
@@ -24,20 +24,20 @@ setup(
         "Development Status :: 4 - Beta",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Framework :: AsyncIO",
         "Topic :: Database",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     install_requires=[
-        "redis~=4.2"
+        "redis~=5.0"
     ],
-    python_requires='~=3.7',
+    python_requires='~=3.8',
     extras_require={
-        "fakeredis": ["fakeredis[lua]>=1.7.1"],
+        "fakeredis": ["fakeredis[lua]~=2.0"],
     },
     include_package_data=True,
     zip_safe=False
