@@ -9,7 +9,7 @@ jobs:
   build:
     name: Build dist & publish
     runs-on: ubuntu-latest
-    if: ! ${{ contains(github.ref, 'dev') || contains(github.ref, 'rc') }}
+    if: ${{ !contains(github.ref, 'dev') && !contains(github.ref, 'rc') }}
 
     steps:
     - name: Checkout the repo and the submodules.
